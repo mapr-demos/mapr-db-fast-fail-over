@@ -1,6 +1,6 @@
 package com.mapr.db.exception;
 
-public class RetryPolicyException extends Exception {
+public class RetryPolicyException extends RuntimeException {
 
   public RetryPolicyException() {}
 
