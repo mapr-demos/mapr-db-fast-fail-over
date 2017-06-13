@@ -1,6 +1,6 @@
 package com.mapr.db.store;
 
-import com.mapr.db.Util;
+import com.mapr.db.exception.RetryPolicyException;
 import com.mapr.db.policy.RetryPolicy;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
@@ -13,7 +13,6 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.RowMutations;
 import org.apache.hadoop.hbase.client.RpcRetryingCallerFactory;
-import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.client.TableConfiguration;
 import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
@@ -27,12 +26,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static com.mapr.db.Util.getTable;
+
 public class EnhancedHTable extends HTable {
 
   private static final int END_OF_RETRIES_FLAG = -1;
 
   private RetryPolicy policy;
-  private Table table;
   private int tempNumOfRetries = END_OF_RETRIES_FLAG;
 
   public EnhancedHTable(TableName tableName, ClusterConnection connection, TableConfiguration tableConfig,
@@ -63,7 +63,10 @@ public class EnhancedHTable extends HTable {
     try {
       return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
-      return table.append(append);
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).append(append);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -91,7 +94,10 @@ public class EnhancedHTable extends HTable {
     try {
       return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
-      return table.checkAndDelete(row, family, qualifier, value, delete);
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).checkAndDelete(row, family, qualifier, value, delete);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -122,7 +128,10 @@ public class EnhancedHTable extends HTable {
     try {
       return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
-      return table.checkAndDelete(row, family, qualifier, compareOp, value, delete);
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).checkAndDelete(row, family, qualifier, compareOp, value, delete);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -153,7 +162,10 @@ public class EnhancedHTable extends HTable {
     try {
       return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
-      return table.checkAndMutate(row, family, qualifier, compareOp, value, rm);
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).checkAndMutate(row, family, qualifier, compareOp, value, rm);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -184,7 +196,10 @@ public class EnhancedHTable extends HTable {
     try {
       return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
-      return table.checkAndPut(row, family, qualifier, value, put);
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).checkAndPut(row, family, qualifier, value, put);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -226,7 +241,10 @@ public class EnhancedHTable extends HTable {
     try {
       completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
-      table.delete(deletes);
+      if (isAlternateTableExist(policy)) {
+        getTable(policy.getAlternateTable()).delete(deletes);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -252,7 +270,10 @@ public class EnhancedHTable extends HTable {
     try {
       return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
-      return table.exists(get);
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).exists(get);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -277,7 +298,10 @@ public class EnhancedHTable extends HTable {
     try {
       return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
-      return table.existsAll(gets);
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).existsAll(gets);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -302,7 +326,10 @@ public class EnhancedHTable extends HTable {
     try {
       completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
-      table.mutateRow(rm);
+      if (isAlternateTableExist(policy)) {
+        getTable(policy.getAlternateTable()).mutateRow(rm);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -327,7 +354,10 @@ public class EnhancedHTable extends HTable {
     try {
       completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
-      table.put(put);
+      if (isAlternateTableExist(policy)) {
+        getTable(policy.getAlternateTable()).put(put);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -340,5 +370,9 @@ public class EnhancedHTable extends HTable {
     if (tempNumOfRetries == END_OF_RETRIES_FLAG) {
       tempNumOfRetries = policy.getNumOfRetries();
     }
+  }
+
+  private boolean isAlternateTableExist(RetryPolicy policy) {
+    return policy.getAlternateTable() != null;
   }
 }
