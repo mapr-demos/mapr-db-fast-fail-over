@@ -2,7 +2,6 @@ package com.mapr.db.store;
 
 import com.mapr.db.exception.RetryPolicyException;
 import com.mapr.db.policy.RetryPolicy;
-import com.mapr.fs.RetryException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Append;
@@ -19,13 +18,22 @@ import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
 
 import java.io.IOException;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import static com.mapr.db.Util.getTable;
 
 public class EnhancedHTable extends HTable {
 
+  private static final int END_OF_RETRIES_FLAG = -1;
+
   private RetryPolicy policy;
-  private int tempNumOfRetries = -1;
+  private int tempNumOfRetries = END_OF_RETRIES_FLAG;
 
   public EnhancedHTable(TableName tableName, ClusterConnection connection, TableConfiguration tableConfig,
                         RpcRetryingCallerFactory rpcCallerFactory, RpcControllerFactory rpcControllerFactory,
@@ -40,15 +48,25 @@ public class EnhancedHTable extends HTable {
   }
 
   public Result append(final Append append, final RetryPolicy retryPolicy) throws IOException {
+    CompletableFuture<Result> completeFuture =
+        CompletableFuture.supplyAsync(() -> {
+          setupQuantityOfRetries(retryPolicy);
+          while (tempNumOfRetries != 0) {
+            try {
+              return super.append(append);
+            } catch (IOException ignored) {
+            }
+            tempNumOfRetries--;
+          }
+          throw new RuntimeException();
+        });
     try {
-      initNumOfRetries(retryPolicy);
-      Result result = super.append(append);
-      tempNumOfRetries = -1;
-      return result;
-    } catch (RetryException rpe) {
-      checkConditionsForRetry(retryPolicy, rpe.getMessage());
-      tempNumOfRetries--;
-      return append(append, retryPolicy);
+      return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | TimeoutException | ExecutionException e) {
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).append(append);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -61,15 +79,25 @@ public class EnhancedHTable extends HTable {
                                 final byte[] family, final byte[] qualifier, final byte[] value,
                                 final Delete delete, final RetryPolicy retryPolicy)
       throws IOException {
+    CompletableFuture<Boolean> completeFuture =
+        CompletableFuture.supplyAsync(() -> {
+          setupQuantityOfRetries(retryPolicy);
+          while (tempNumOfRetries != 0) {
+            try {
+              return super.checkAndDelete(row, family, qualifier, value, delete);
+            } catch (IOException ignored) {
+            }
+            tempNumOfRetries--;
+          }
+          throw new RuntimeException();
+        });
     try {
-      initNumOfRetries(retryPolicy);
-      boolean result = super.checkAndDelete(row, family, qualifier, value, delete);
-      tempNumOfRetries = -1;
-      return result;
-    } catch (RetryException rpe) {
-      checkConditionsForRetry(retryPolicy, rpe.getMessage());
-      tempNumOfRetries--;
-      return checkAndDelete(row, family, qualifier, value, delete, retryPolicy);
+      return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | TimeoutException | ExecutionException e) {
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).checkAndDelete(row, family, qualifier, value, delete);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -85,15 +113,25 @@ public class EnhancedHTable extends HTable {
                                 final byte[] qualifier, final CompareFilter.CompareOp compareOp, final byte[] value,
                                 final Delete delete, final RetryPolicy retryPolicy)
       throws IOException {
+    CompletableFuture<Boolean> completeFuture =
+        CompletableFuture.supplyAsync(() -> {
+          setupQuantityOfRetries(retryPolicy);
+          while (tempNumOfRetries != 0) {
+            try {
+              return super.checkAndDelete(row, family, qualifier, compareOp, value, delete);
+            } catch (IOException ignored) {
+            }
+            tempNumOfRetries--;
+          }
+          throw new RuntimeException();
+        });
     try {
-      initNumOfRetries(retryPolicy);
-      boolean result = super.checkAndDelete(row, family, qualifier, compareOp, value, delete);
-      tempNumOfRetries = -1;
-      return result;
-    } catch (RetryException rpe) {
-      checkConditionsForRetry(retryPolicy, rpe.getMessage());
-      tempNumOfRetries--;
-      return checkAndDelete(row, family, qualifier, compareOp, value, delete, retryPolicy);
+      return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | TimeoutException | ExecutionException e) {
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).checkAndDelete(row, family, qualifier, compareOp, value, delete);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -109,15 +147,25 @@ public class EnhancedHTable extends HTable {
                                 final CompareFilter.CompareOp compareOp, final byte[] value,
                                 final RowMutations rm, final RetryPolicy retryPolicy)
       throws IOException {
+    CompletableFuture<Boolean> completeFuture =
+        CompletableFuture.supplyAsync(() -> {
+          setupQuantityOfRetries(retryPolicy);
+          while (tempNumOfRetries != 0) {
+            try {
+              return super.checkAndMutate(row, family, qualifier, compareOp, value, rm);
+            } catch (IOException ignored) {
+            }
+            tempNumOfRetries--;
+          }
+          throw new RuntimeException();
+        });
     try {
-      initNumOfRetries(retryPolicy);
-      boolean result = super.checkAndMutate(row, family, qualifier, compareOp, value, rm);
-      tempNumOfRetries = -1;
-      return result;
-    } catch (RetryException rpe) {
-      checkConditionsForRetry(retryPolicy, rpe.getMessage());
-      tempNumOfRetries--;
-      return checkAndMutate(row, family, qualifier, compareOp, value, rm, retryPolicy);
+      return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | TimeoutException | ExecutionException e) {
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).checkAndMutate(row, family, qualifier, compareOp, value, rm);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -133,15 +181,25 @@ public class EnhancedHTable extends HTable {
                              final byte[] family, final byte[] qualifier, final byte[] value,
                              final Put put, final RetryPolicy retryPolicy)
       throws IOException {
+    CompletableFuture<Boolean> completeFuture =
+        CompletableFuture.supplyAsync(() -> {
+          setupQuantityOfRetries(retryPolicy);
+          while (tempNumOfRetries != 0) {
+            try {
+              return super.checkAndPut(row, family, qualifier, value, put);
+            } catch (IOException ignored) {
+            }
+            tempNumOfRetries--;
+          }
+          throw new RuntimeException();
+        });
     try {
-      initNumOfRetries(retryPolicy);
-      boolean result = super.checkAndPut(row, family, qualifier, value, put);
-      tempNumOfRetries = -1;
-      return result;
-    } catch (RetryException rpe) {
-      checkConditionsForRetry(retryPolicy, rpe.getMessage());
-      tempNumOfRetries--;
-      return checkAndPut(row, family, qualifier, value, put, retryPolicy);
+      return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | TimeoutException | ExecutionException e) {
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).checkAndPut(row, family, qualifier, value, put);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -155,15 +213,9 @@ public class EnhancedHTable extends HTable {
 
   public void delete(final Delete delete, final RetryPolicy retryPolicy)
       throws IOException {
-    try {
-      initNumOfRetries(retryPolicy);
-      super.delete(delete);
-      tempNumOfRetries = -1;
-    } catch (RetryException rpe) {
-      checkConditionsForRetry(retryPolicy, rpe.getMessage());
-      tempNumOfRetries--;
-      delete(delete, retryPolicy);
-    }
+    List<Delete> deletes = new LinkedList<>();
+    deletes.add(delete);
+    this.delete(deletes, retryPolicy);
   }
 
   @Override
@@ -174,14 +226,25 @@ public class EnhancedHTable extends HTable {
 
   public void delete(final List<Delete> deletes, final RetryPolicy retryPolicy)
       throws IOException {
+    CompletableFuture<Void> completeFuture =
+        CompletableFuture.supplyAsync(() -> {
+          setupQuantityOfRetries(retryPolicy);
+          while (tempNumOfRetries != 0) {
+            try {
+              super.delete(deletes);
+            } catch (IOException ignored) {
+            }
+            tempNumOfRetries--;
+          }
+          throw new RuntimeException();
+        });
     try {
-      initNumOfRetries(retryPolicy);
-      super.delete(deletes);
-      tempNumOfRetries = -1;
-    } catch (RetryException rpe) {
-      checkConditionsForRetry(retryPolicy, rpe.getMessage());
-      tempNumOfRetries--;
-      delete(deletes, retryPolicy);
+      completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | TimeoutException | ExecutionException e) {
+      if (isAlternateTableExist(policy)) {
+        getTable(policy.getAlternateTable()).delete(deletes);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -192,15 +255,25 @@ public class EnhancedHTable extends HTable {
   }
 
   public boolean exists(final Get get, final RetryPolicy retryPolicy) throws IOException {
+    CompletableFuture<Boolean> completeFuture =
+        CompletableFuture.supplyAsync(() -> {
+          setupQuantityOfRetries(retryPolicy);
+          while (tempNumOfRetries != 0) {
+            try {
+              return super.exists(get);
+            } catch (IOException ignored) {
+            }
+            tempNumOfRetries--;
+          }
+          throw new RuntimeException();
+        });
     try {
-      initNumOfRetries(retryPolicy);
-      boolean result = super.exists(get);
-      tempNumOfRetries = -1;
-      return result;
-    } catch (RetryException rpe) {
-      checkConditionsForRetry(retryPolicy, rpe.getMessage());
-      tempNumOfRetries--;
-      return exists(get, retryPolicy);
+      return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | TimeoutException | ExecutionException e) {
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).exists(get);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -210,15 +283,25 @@ public class EnhancedHTable extends HTable {
   }
 
   public boolean[] existsAll(final List<Get> gets, final RetryPolicy retryPolicy) throws IOException {
+    CompletableFuture<boolean[]> completeFuture =
+        CompletableFuture.supplyAsync(() -> {
+          setupQuantityOfRetries(retryPolicy);
+          while (tempNumOfRetries != 0) {
+            try {
+              return super.existsAll(gets);
+            } catch (IOException ignored) {
+            }
+            tempNumOfRetries--;
+          }
+          throw new RuntimeException();
+        });
     try {
-      initNumOfRetries(retryPolicy);
-      boolean[] result = super.existsAll(gets);
-      tempNumOfRetries = -1;
-      return result;
-    } catch (RetryException rpe) {
-      checkConditionsForRetry(retryPolicy, rpe.getMessage());
-      tempNumOfRetries--;
-      return existsAll(gets, retryPolicy);
+      return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | TimeoutException | ExecutionException e) {
+      if (isAlternateTableExist(policy)) {
+        return getTable(policy.getAlternateTable()).existsAll(gets);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -227,33 +310,26 @@ public class EnhancedHTable extends HTable {
     return existsAll(gets, policy);
   }
 
-  public Boolean[] exists(final List<Get> gets, final RetryPolicy retryPolicy) throws IOException {
-    try {
-      initNumOfRetries(retryPolicy);
-      Boolean[] result = super.exists(gets);
-      tempNumOfRetries = -1;
-      return result;
-    } catch (RetryException rpe) {
-      checkConditionsForRetry(retryPolicy, rpe.getMessage());
-      tempNumOfRetries--;
-      return exists(gets, retryPolicy);
-    }
-  }
-
-  @Override
-  public Boolean[] exists(final List<Get> gets) throws IOException {
-    return exists(gets, policy);
-  }
-
   public void mutateRow(final RowMutations rm, final RetryPolicy retryPolicy) throws IOException {
+    CompletableFuture<Void> completeFuture =
+        CompletableFuture.supplyAsync(() -> {
+          setupQuantityOfRetries(retryPolicy);
+          while (tempNumOfRetries != 0) {
+            try {
+              super.mutateRow(rm);
+            } catch (IOException ignored) {
+            }
+            tempNumOfRetries--;
+          }
+          throw new RuntimeException();
+        });
     try {
-      initNumOfRetries(retryPolicy);
-      super.mutateRow(rm);
-      tempNumOfRetries = -1;
-    } catch (RetryException rpe) {
-      checkConditionsForRetry(retryPolicy, rpe.getMessage());
-      tempNumOfRetries--;
-      mutateRow(rm, retryPolicy);
+      completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | TimeoutException | ExecutionException e) {
+      if (isAlternateTableExist(policy)) {
+        getTable(policy.getAlternateTable()).mutateRow(rm);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -263,14 +339,25 @@ public class EnhancedHTable extends HTable {
   }
 
   public void put(final Put put, final RetryPolicy retryPolicy) throws IOException {
+    CompletableFuture<Void> completeFuture =
+        CompletableFuture.supplyAsync(() -> {
+          setupQuantityOfRetries(retryPolicy);
+          while (tempNumOfRetries != 0) {
+            try {
+              super.put(put);
+            } catch (IOException ignored) {
+            }
+            tempNumOfRetries--;
+          }
+          throw new RuntimeException();
+        });
     try {
-      initNumOfRetries(retryPolicy);
-      super.put(put);
-      tempNumOfRetries = -1;
-    } catch (RetryException rpe) {
-      checkConditionsForRetry(retryPolicy, rpe.getMessage());
-      tempNumOfRetries--;
-      put(put, retryPolicy);
+      completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | TimeoutException | ExecutionException e) {
+      if (isAlternateTableExist(policy)) {
+        getTable(policy.getAlternateTable()).put(put);
+      }
+      throw new RetryPolicyException();
     }
   }
 
@@ -279,25 +366,13 @@ public class EnhancedHTable extends HTable {
     put(put, policy);
   }
 
-  private void initNumOfRetries(RetryPolicy policy) {
-    if (tempNumOfRetries == -1) {
+  private void setupQuantityOfRetries(RetryPolicy policy) {
+    if (tempNumOfRetries == END_OF_RETRIES_FLAG) {
       tempNumOfRetries = policy.getNumOfRetries();
     }
   }
 
-  private void checkConditionsForRetry(RetryPolicy policy, String exceptionMsg) {
-    if (tempNumOfRetries == 0) {
-      throw new RetryPolicyException(exceptionMsg);
-    }
-    waitForTimeout(policy.getTimeout());
+  private boolean isAlternateTableExist(RetryPolicy policy) {
+    return policy.getAlternateTable() != null;
   }
-
-  private void waitForTimeout(long timeout) {
-    try {
-      wait(timeout);
-    } catch (InterruptedException e) {
-      e.printStackTrace();
-    }
-  }
-
 }
