@@ -30,10 +30,7 @@ import static com.mapr.db.Util.getTable;
 
 public class EnhancedHTable extends HTable {
 
-  private static final int END_OF_RETRIES_FLAG = -1;
-
   private RetryPolicy policy;
-  private int tempNumOfRetries = END_OF_RETRIES_FLAG;
 
   public EnhancedHTable(TableName tableName, ClusterConnection connection, TableConfiguration tableConfig,
                         RpcRetryingCallerFactory rpcCallerFactory, RpcControllerFactory rpcControllerFactory,
@@ -50,13 +47,13 @@ public class EnhancedHTable extends HTable {
   public Result append(final Append append, final RetryPolicy retryPolicy) throws IOException {
     CompletableFuture<Result> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          setupQuantityOfRetries(retryPolicy);
-          while (tempNumOfRetries != 0) {
+          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          while (numberOfRetries != 0) {
             try {
               return super.append(append);
             } catch (IOException ignored) {
+              numberOfRetries--;
             }
-            tempNumOfRetries--;
           }
           throw new RuntimeException();
         });
@@ -81,13 +78,13 @@ public class EnhancedHTable extends HTable {
       throws IOException {
     CompletableFuture<Boolean> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          setupQuantityOfRetries(retryPolicy);
-          while (tempNumOfRetries != 0) {
+          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          while (numberOfRetries != 0) {
             try {
               return super.checkAndDelete(row, family, qualifier, value, delete);
             } catch (IOException ignored) {
+              numberOfRetries--;
             }
-            tempNumOfRetries--;
           }
           throw new RuntimeException();
         });
@@ -115,13 +112,13 @@ public class EnhancedHTable extends HTable {
       throws IOException {
     CompletableFuture<Boolean> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          setupQuantityOfRetries(retryPolicy);
-          while (tempNumOfRetries != 0) {
+          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          while (numberOfRetries != 0) {
             try {
               return super.checkAndDelete(row, family, qualifier, compareOp, value, delete);
             } catch (IOException ignored) {
+              numberOfRetries--;
             }
-            tempNumOfRetries--;
           }
           throw new RuntimeException();
         });
@@ -149,13 +146,13 @@ public class EnhancedHTable extends HTable {
       throws IOException {
     CompletableFuture<Boolean> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          setupQuantityOfRetries(retryPolicy);
-          while (tempNumOfRetries != 0) {
+          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          while (numberOfRetries != 0) {
             try {
               return super.checkAndMutate(row, family, qualifier, compareOp, value, rm);
             } catch (IOException ignored) {
+              numberOfRetries--;
             }
-            tempNumOfRetries--;
           }
           throw new RuntimeException();
         });
@@ -183,13 +180,13 @@ public class EnhancedHTable extends HTable {
       throws IOException {
     CompletableFuture<Boolean> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          setupQuantityOfRetries(retryPolicy);
-          while (tempNumOfRetries != 0) {
+          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          while (numberOfRetries != 0) {
             try {
               return super.checkAndPut(row, family, qualifier, value, put);
             } catch (IOException ignored) {
+              numberOfRetries--;
             }
-            tempNumOfRetries--;
           }
           throw new RuntimeException();
         });
@@ -228,13 +225,14 @@ public class EnhancedHTable extends HTable {
       throws IOException {
     CompletableFuture<Void> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          setupQuantityOfRetries(retryPolicy);
-          while (tempNumOfRetries != 0) {
+          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          while (numberOfRetries != 0) {
             try {
               super.delete(deletes);
+              return null;
             } catch (IOException ignored) {
+              numberOfRetries--;
             }
-            tempNumOfRetries--;
           }
           throw new RuntimeException();
         });
@@ -257,13 +255,13 @@ public class EnhancedHTable extends HTable {
   public boolean exists(final Get get, final RetryPolicy retryPolicy) throws IOException {
     CompletableFuture<Boolean> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          setupQuantityOfRetries(retryPolicy);
-          while (tempNumOfRetries != 0) {
+          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          while (numberOfRetries != 0) {
             try {
               return super.exists(get);
             } catch (IOException ignored) {
+              numberOfRetries--;
             }
-            tempNumOfRetries--;
           }
           throw new RuntimeException();
         });
@@ -285,13 +283,13 @@ public class EnhancedHTable extends HTable {
   public boolean[] existsAll(final List<Get> gets, final RetryPolicy retryPolicy) throws IOException {
     CompletableFuture<boolean[]> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          setupQuantityOfRetries(retryPolicy);
-          while (tempNumOfRetries != 0) {
+          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          while (numberOfRetries != 0) {
             try {
               return super.existsAll(gets);
             } catch (IOException ignored) {
+              numberOfRetries--;
             }
-            tempNumOfRetries--;
           }
           throw new RuntimeException();
         });
@@ -313,13 +311,14 @@ public class EnhancedHTable extends HTable {
   public void mutateRow(final RowMutations rm, final RetryPolicy retryPolicy) throws IOException {
     CompletableFuture<Void> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          setupQuantityOfRetries(retryPolicy);
-          while (tempNumOfRetries != 0) {
+          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          while (numberOfRetries != 0) {
             try {
               super.mutateRow(rm);
+              return null;
             } catch (IOException ignored) {
+              numberOfRetries--;
             }
-            tempNumOfRetries--;
           }
           throw new RuntimeException();
         });
@@ -341,13 +340,14 @@ public class EnhancedHTable extends HTable {
   public void put(final Put put, final RetryPolicy retryPolicy) throws IOException {
     CompletableFuture<Void> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          setupQuantityOfRetries(retryPolicy);
-          while (tempNumOfRetries != 0) {
+          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          while (numberOfRetries != 0) {
             try {
               super.put(put);
+              return null;
             } catch (IOException ignored) {
+              numberOfRetries--;
             }
-            tempNumOfRetries--;
           }
           throw new RuntimeException();
         });
@@ -364,12 +364,6 @@ public class EnhancedHTable extends HTable {
   @Override
   public void put(final Put put) throws IOException {
     put(put, policy);
-  }
-
-  private void setupQuantityOfRetries(RetryPolicy policy) {
-    if (tempNumOfRetries == END_OF_RETRIES_FLAG) {
-      tempNumOfRetries = policy.getNumOfRetries();
-    }
   }
 
   private boolean isAlternateTableExist(RetryPolicy policy) {
