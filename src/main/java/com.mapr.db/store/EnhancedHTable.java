@@ -2,6 +2,7 @@ package com.mapr.db.store;
 
 import com.mapr.db.exception.RetryPolicyException;
 import com.mapr.db.policy.RetryPolicy;
+import com.mapr.org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Append;
@@ -47,7 +48,7 @@ public class EnhancedHTable extends HTable {
   public Result append(final Append append, final RetryPolicy retryPolicy) throws IOException {
     CompletableFuture<Result> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          int numberOfRetries = retryPolicy.getNumOfRetries();
           while (numberOfRetries != 0) {
             try {
               return super.append(append);
@@ -78,7 +79,7 @@ public class EnhancedHTable extends HTable {
       throws IOException {
     CompletableFuture<Boolean> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          int numberOfRetries = retryPolicy.getNumOfRetries();
           while (numberOfRetries != 0) {
             try {
               return super.checkAndDelete(row, family, qualifier, value, delete);
@@ -112,7 +113,7 @@ public class EnhancedHTable extends HTable {
       throws IOException {
     CompletableFuture<Boolean> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          int numberOfRetries = retryPolicy.getNumOfRetries();
           while (numberOfRetries != 0) {
             try {
               return super.checkAndDelete(row, family, qualifier, compareOp, value, delete);
@@ -146,7 +147,7 @@ public class EnhancedHTable extends HTable {
       throws IOException {
     CompletableFuture<Boolean> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          int numberOfRetries = retryPolicy.getNumOfRetries();
           while (numberOfRetries != 0) {
             try {
               return super.checkAndMutate(row, family, qualifier, compareOp, value, rm);
@@ -180,7 +181,7 @@ public class EnhancedHTable extends HTable {
       throws IOException {
     CompletableFuture<Boolean> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          int numberOfRetries = retryPolicy.getNumOfRetries();
           while (numberOfRetries != 0) {
             try {
               return super.checkAndPut(row, family, qualifier, value, put);
@@ -225,7 +226,7 @@ public class EnhancedHTable extends HTable {
       throws IOException {
     CompletableFuture<Void> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          int numberOfRetries = retryPolicy.getNumOfRetries();
           while (numberOfRetries != 0) {
             try {
               super.delete(deletes);
@@ -241,8 +242,9 @@ public class EnhancedHTable extends HTable {
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
       if (isAlternateTableExist(policy)) {
         getTable(policy.getAlternateTable()).delete(deletes);
+      } else {
+        throw new RetryPolicyException();
       }
-      throw new RetryPolicyException();
     }
   }
 
@@ -255,7 +257,7 @@ public class EnhancedHTable extends HTable {
   public boolean exists(final Get get, final RetryPolicy retryPolicy) throws IOException {
     CompletableFuture<Boolean> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          int numberOfRetries = retryPolicy.getNumOfRetries();
           while (numberOfRetries != 0) {
             try {
               return super.exists(get);
@@ -283,7 +285,7 @@ public class EnhancedHTable extends HTable {
   public boolean[] existsAll(final List<Get> gets, final RetryPolicy retryPolicy) throws IOException {
     CompletableFuture<boolean[]> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          int numberOfRetries = retryPolicy.getNumOfRetries();
           while (numberOfRetries != 0) {
             try {
               return super.existsAll(gets);
@@ -311,7 +313,7 @@ public class EnhancedHTable extends HTable {
   public void mutateRow(final RowMutations rm, final RetryPolicy retryPolicy) throws IOException {
     CompletableFuture<Void> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          int numberOfRetries = retryPolicy.getNumOfRetries();
           while (numberOfRetries != 0) {
             try {
               super.mutateRow(rm);
@@ -327,8 +329,9 @@ public class EnhancedHTable extends HTable {
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
       if (isAlternateTableExist(policy)) {
         getTable(policy.getAlternateTable()).mutateRow(rm);
+      } else {
+        throw new RetryPolicyException();
       }
-      throw new RetryPolicyException();
     }
   }
 
@@ -340,7 +343,7 @@ public class EnhancedHTable extends HTable {
   public void put(final Put put, final RetryPolicy retryPolicy) throws IOException {
     CompletableFuture<Void> completeFuture =
         CompletableFuture.supplyAsync(() -> {
-          int numberOfRetries  = retryPolicy.getNumOfRetries();
+          int numberOfRetries = retryPolicy.getNumOfRetries();
           while (numberOfRetries != 0) {
             try {
               super.put(put);
@@ -356,8 +359,9 @@ public class EnhancedHTable extends HTable {
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
       if (isAlternateTableExist(policy)) {
         getTable(policy.getAlternateTable()).put(put);
+      } else {
+        throw new RetryPolicyException();
       }
-      throw new RetryPolicyException();
     }
   }
 
