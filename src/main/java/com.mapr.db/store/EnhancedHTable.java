@@ -64,9 +64,6 @@ public class EnhancedHTable extends HTable {
     try {
       return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
-      if (isAlternateTableExist(policy)) {
-        return getTable(policy.getAlternateTable()).append(append);
-      }
       throw new RetryPolicyException();
     }
   }
@@ -242,15 +239,7 @@ public class EnhancedHTable extends HTable {
     try {
       completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException | ExecutionException e) {
-      String tableName = getAlternativeTableName();
-      Consumer<Void> putTask = s -> {
-        try {
-          getTable(tableName).delete(deletes);
-        } catch (IOException e1) {
-          e1.printStackTrace();
-        }
-      };
-      performOperationWithAlternativeTable(putTask);
+      throw new RetryPolicyException();
     }
   }
 
