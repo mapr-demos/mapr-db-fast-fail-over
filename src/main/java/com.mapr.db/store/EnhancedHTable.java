@@ -17,6 +17,7 @@ import org.apache.hadoop.hbase.client.RpcRetryingCallerFactory;
 import org.apache.hadoop.hbase.client.TableConfiguration;
 import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.ipc.RpcControllerFactory;
+import org.codehaus.jackson.map.ObjectMapper;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -46,6 +47,15 @@ public class EnhancedHTable extends HTable {
   public EnhancedHTable(Configuration configuration, String table, RetryPolicy retryPolicy) throws IOException {
     super(configuration, table);
     this.policy = retryPolicy;
+  }
+
+  public EnhancedHTable(Configuration configuration, String table) throws IOException {
+    super(configuration, table);
+    this.policy = getPolicyFrom(configuration);
+  }
+
+  private RetryPolicy getPolicyFrom(Configuration configuration) throws IOException {
+    return new ObjectMapper().readValue(configuration.get("com.mapr.db.RetryPolicy"), RetryPolicy.class);
   }
 
   public Result append(final Append append, final RetryPolicy retryPolicy) throws IOException {

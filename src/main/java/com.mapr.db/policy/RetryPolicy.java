@@ -1,6 +1,9 @@
 package com.mapr.db.policy;
 
 import lombok.Getter;
+import org.codehaus.jackson.map.ObjectMapper;
+
+import java.io.IOException;
 
 @Getter
 public class RetryPolicy {
@@ -15,6 +18,25 @@ public class RetryPolicy {
     this.numOfRetries = builder.numOfRetries;
     this.alternateTable = builder.alternateTable;
     this.alternateSuffix = builder.alternateSuffix;
+  }
+
+  public RetryPolicy() {
+    this.timeout = 0;
+    this.numOfRetries = 0;
+    this.alternateTable = null;
+    this.alternateSuffix = null;
+  }
+
+  public String toJson() {
+    return convertToJson();
+  }
+
+  private String convertToJson() {
+    try {
+      return new ObjectMapper().writeValueAsString(this);
+    } catch (IOException e) {
+      return "{}";
+    }
   }
 
   @Override
