@@ -33,7 +33,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>com.mapr.db.Test</mainClass>
+                            <mainClass>com.mapr.db.Sample</mainClass>
                         </manifest>
                     </archive>
 
