@@ -22,6 +22,8 @@ import org.codehaus.jackson.map.ObjectMapper;
 @Getter
 @ToString
 @Builder(toBuilder = true)
+@AllArgsConstructor
+@NoArgsConstructor
 public class RetryPolicy {
 
     /**
