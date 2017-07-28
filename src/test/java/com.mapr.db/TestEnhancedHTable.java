@@ -17,29 +17,29 @@ import static org.mockito.Mockito.when;
 
 public class TestEnhancedHTable {
 
-  private HTable hTable;
+    private HTable hTable;
 
-  public TestEnhancedHTable() throws IOException {
-    Configuration configuration = HBaseConfiguration.create();
-    RetryPolicy policy = new RetryPolicy.Builder()
-        .setNumOfReties(50)
-        .setTimeout(50000)
-        .setAlternateSuffix(".foo")
-        .setAlternateTable("/some/different/table")
-        .build();
-    this.hTable = new EnhancedHTable(configuration, "/apps/table_1", policy);
-  }
+    public TestEnhancedHTable() throws IOException {
+        Configuration configuration = HBaseConfiguration.create();
+        RetryPolicy policy = RetryPolicy.builder()
+                .numberOfRetries(50)
+                .timeout(50000)
+                .alternateSuffix(".foo")
+                .alternateTable("/some/different/table")
+                .build();
+        this.hTable = new EnhancedHTable(configuration, "/apps/table_1", policy);
+    }
 
-  @Test
-  public void testAppend() throws IOException {
-    AbstractHTable abstractHTableMock;
-    abstractHTableMock = mock(AbstractHTable.class);
+    @Test
+    public void testAppend() throws IOException {
+        AbstractHTable abstractHTableMock;
+        abstractHTableMock = mock(AbstractHTable.class);
 
-    Append append = mock(Append.class);
+        Append append = mock(Append.class);
 
-    when(abstractHTableMock.append(append))
-        .thenThrow(RetryException.class);
+        when(abstractHTableMock.append(append))
+                .thenThrow(RetryException.class);
 
-    hTable.append(append);
-  }
+        hTable.append(append);
+    }
 }
