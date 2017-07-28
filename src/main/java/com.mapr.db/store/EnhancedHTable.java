@@ -20,6 +20,29 @@ import java.util.function.Supplier;
 
 import static com.mapr.db.Util.getTable;
 
+/**
+ * <p>The developer can create an instance of a RetryPolicy
+ * that will be used/defined at different levels:
+ * <ul>
+ * <li>Overall Configuration</li>
+ * <li>Table</li>
+ * <li>Operation</li>
+ * </ul>
+ * </p>
+ * <p>This API can add an optional parameter to the
+ * methods used to interact with a single table:
+ * <ul>
+ * <li>append</li>
+ * <li>checkAndDelete</li>
+ * <li>checkAndMutate</li>
+ * <li>checkAndPut</li>
+ * <li>delete</li>
+ * <li>exists</li>
+ * <li>mutateRow</li>
+ * <li>put</li>
+ * </ul>
+ * </p>
+ */
 @Slf4j
 public class EnhancedHTable extends HTable {
 
@@ -90,8 +113,8 @@ public class EnhancedHTable extends HTable {
      */
     @Override
     public boolean checkAndDelete(byte[] row,
-            byte[] family, byte[] qualifier, byte[] value,
-            Delete delete) {
+                                  byte[] family, byte[] qualifier, byte[] value,
+                                  Delete delete) {
         return checkAndDelete(row, family, qualifier, value, delete, policy);
     }
 
@@ -102,28 +125,27 @@ public class EnhancedHTable extends HTable {
      * @return true if operation successful, false if some trouble was occurred.
      */
     public boolean checkAndDelete(byte[] row,
-            byte[] family, byte[] qualifier, byte[] value,
-            Delete delete, RetryPolicy retryPolicy) {
-        Supplier<Boolean> supplier = () -> {
-            try {
-                return super.checkAndDelete(row, family, qualifier, value, delete);
-            } catch (IOException e) {
-                throw new RetryPolicyException();
-            }
-        };
-        CompletableFuture<Boolean> completableFuture = processRequestWithRetries(supplier, retryPolicy);
+                                  byte[] family, byte[] qualifier, byte[] value,
+                                  Delete delete, RetryPolicy retryPolicy) {
+        CompletableFuture<Boolean> completableFuture =
+                processRequestWithRetries(retryPolicy, () -> {
+                    try {
+                        return super.checkAndDelete(row, family, qualifier, value, delete);
+                    } catch (IOException e) {
+                        throw new RetryPolicyException();
+                    }
+                });
         try {
             return completableFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | TimeoutException | ExecutionException e) {
             String tableName = getAlternativeTableName();
-            Supplier<Boolean> putTask = () -> {
+            return performOperationWithAlternativeTable(() -> {
                 try {
                     return getTable(tableName).checkAndDelete(row, family, qualifier, value, delete);
                 } catch (IOException e1) {
                     throw new RetryPolicyException();
                 }
-            };
-            return performOperationWithAlternativeTable(putTask);
+            });
         }
     }
 
@@ -132,8 +154,8 @@ public class EnhancedHTable extends HTable {
      */
     @Override
     public boolean checkAndDelete(byte[] row, byte[] family,
-            byte[] qualifier, CompareFilter.CompareOp compareOp, byte[] value,
-            Delete delete) {
+                                  byte[] qualifier, CompareFilter.CompareOp compareOp, byte[] value,
+                                  Delete delete) {
         return checkAndDelete(row, family, qualifier, compareOp, value, delete, policy);
     }
 
@@ -144,28 +166,28 @@ public class EnhancedHTable extends HTable {
      * @return true if operation successful, false if some trouble was occurred.
      */
     public boolean checkAndDelete(byte[] row, byte[] family,
-            byte[] qualifier, CompareFilter.CompareOp compareOp, byte[] value,
-            Delete delete, RetryPolicy retryPolicy) {
-        Supplier<Boolean> supplier = () -> {
-            try {
-                return super.checkAndDelete(row, family, qualifier, compareOp, value, delete);
-            } catch (IOException e) {
-                throw new RetryPolicyException();
-            }
-        };
-        CompletableFuture<Boolean> completeFuture = processRequestWithRetries(supplier, retryPolicy);
+                                  byte[] qualifier, CompareFilter.CompareOp compareOp, byte[] value,
+                                  Delete delete, RetryPolicy retryPolicy) {
+        CompletableFuture<Boolean> completeFuture =
+                processRequestWithRetries(retryPolicy, () -> {
+                    try {
+                        return super.checkAndDelete(row, family, qualifier, compareOp, value, delete);
+                    } catch (IOException e) {
+                        throw new RetryPolicyException();
+                    }
+                });
         try {
             return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | TimeoutException | ExecutionException e) {
             String tableName = getAlternativeTableName();
-            Supplier<Boolean> putTask = () -> {
+
+            return performOperationWithAlternativeTable(() -> {
                 try {
                     return getTable(tableName).checkAndDelete(row, family, qualifier, compareOp, value, delete);
                 } catch (IOException e1) {
                     throw new RetryPolicyException();
                 }
-            };
-            return performOperationWithAlternativeTable(putTask);
+            });
         }
     }
 
@@ -174,8 +196,8 @@ public class EnhancedHTable extends HTable {
      */
     @Override
     public boolean checkAndMutate(byte[] row, byte[] family, byte[] qualifier,
-            CompareFilter.CompareOp compareOp, byte[] value,
-            RowMutations rm) {
+                                  CompareFilter.CompareOp compareOp, byte[] value,
+                                  RowMutations rm) {
         return checkAndMutate(row, family, qualifier, compareOp, value, rm, policy);
     }
 
@@ -186,29 +208,28 @@ public class EnhancedHTable extends HTable {
      * @return
      */
     public boolean checkAndMutate(byte[] row, byte[] family, byte[] qualifier,
-            CompareFilter.CompareOp compareOp, byte[] value,
-            RowMutations rm, RetryPolicy retryPolicy) {
-        Supplier<Boolean> supplier = () -> {
-            try {
-                return super.checkAndMutate(row, family, qualifier, compareOp, value, rm);
-            } catch (IOException e) {
-                throw new RetryPolicyException();
-            }
-        };
-        CompletableFuture<Boolean> completeFuture
-                = processRequestWithRetries(supplier, retryPolicy);
+                                  CompareFilter.CompareOp compareOp, byte[] value,
+                                  RowMutations rm, RetryPolicy retryPolicy) {
+        CompletableFuture<Boolean> completeFuture =
+                processRequestWithRetries(retryPolicy, () -> {
+                    try {
+                        return super.checkAndMutate(row, family, qualifier, compareOp, value, rm);
+                    } catch (IOException e) {
+                        throw new RetryPolicyException();
+                    }
+                });
         try {
             return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | TimeoutException | ExecutionException e) {
             String tableName = getAlternativeTableName();
-            Supplier<Boolean> putTask = () -> {
+
+            return performOperationWithAlternativeTable(() -> {
                 try {
                     return getTable(tableName).checkAndMutate(row, family, qualifier, compareOp, value, rm);
                 } catch (IOException e1) {
                     throw new RetryPolicyException();
                 }
-            };
-            return performOperationWithAlternativeTable(putTask);
+            });
         }
     }
 
@@ -217,8 +238,8 @@ public class EnhancedHTable extends HTable {
      */
     @Override
     public boolean checkAndPut(byte[] row,
-            byte[] family, byte[] qualifier, byte[] value,
-            Put put) {
+                               byte[] family, byte[] qualifier, byte[] value,
+                               Put put) {
         return checkAndPut(row, family, qualifier, value, put, policy);
     }
 
@@ -229,29 +250,28 @@ public class EnhancedHTable extends HTable {
      * @return
      */
     public boolean checkAndPut(byte[] row,
-            byte[] family, byte[] qualifier, byte[] value,
-            Put put, RetryPolicy retryPolicy) {
-        Supplier<Boolean> supplier = () -> {
-            try {
-                return super.checkAndPut(row, family, qualifier, value, put);
-            } catch (IOException e) {
-                throw new RetryPolicyException();
-            }
-        };
-        CompletableFuture<Boolean> completeFuture
-                = processRequestWithRetries(supplier, retryPolicy);
+                               byte[] family, byte[] qualifier, byte[] value,
+                               Put put, RetryPolicy retryPolicy) {
+        CompletableFuture<Boolean> completeFuture =
+                processRequestWithRetries(retryPolicy, () -> {
+                    try {
+                        return super.checkAndPut(row, family, qualifier, value, put);
+                    } catch (IOException e) {
+                        throw new RetryPolicyException();
+                    }
+                });
         try {
             return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | TimeoutException | ExecutionException e) {
             String tableName = getAlternativeTableName();
-            Supplier<Boolean> putTask = () -> {
+
+            return performOperationWithAlternativeTable(() -> {
                 try {
                     return getTable(tableName).checkAndPut(row, family, qualifier, value, put);
                 } catch (IOException e1) {
                     throw new RetryPolicyException();
                 }
-            };
-            return performOperationWithAlternativeTable(putTask);
+            });
         }
     }
 
@@ -288,14 +308,14 @@ public class EnhancedHTable extends HTable {
      * @param retryPolicy Data for configuration retry policy for this operation.
      */
     public void delete(List<Delete> deletes, RetryPolicy retryPolicy) {
-        Consumer<Void> consumer = s -> {
-            try {
-                super.delete(deletes);
-            } catch (IOException e) {
-                throw new RetryPolicyException();
-            }
-        };
-        CompletableFuture<Void> completeFuture = processRequestWithRetries(consumer, retryPolicy);
+        CompletableFuture<Void> completeFuture =
+                processRequestWithRetries(retryPolicy, s -> {
+                    try {
+                        super.delete(deletes);
+                    } catch (IOException e) {
+                        throw new RetryPolicyException();
+                    }
+                });
         try {
             completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | TimeoutException | ExecutionException e) {
@@ -319,14 +339,14 @@ public class EnhancedHTable extends HTable {
      * @return
      */
     public boolean exists(Get get, RetryPolicy retryPolicy) {
-        Supplier<Boolean> supplier = () -> {
-            try {
-                return super.exists(get);
-            } catch (IOException e) {
-                throw new RetryPolicyException();
-            }
-        };
-        CompletableFuture<Boolean> completeFuture = processRequestWithRetries(supplier, retryPolicy);
+        CompletableFuture<Boolean> completeFuture =
+                processRequestWithRetries(retryPolicy, () -> {
+                    try {
+                        return super.exists(get);
+                    } catch (IOException e) {
+                        throw new RetryPolicyException();
+                    }
+                });
         try {
             return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | TimeoutException | ExecutionException e) {
@@ -393,26 +413,26 @@ public class EnhancedHTable extends HTable {
      * @param retryPolicy Data for configuration retry policy for this operation.
      */
     public void mutateRow(RowMutations rm, RetryPolicy retryPolicy) {
-        Consumer<Void> consumer = s -> {
-            try {
-                super.mutateRow(rm);
-            } catch (IOException e) {
-                throw new RetryPolicyException();
-            }
-        };
-        CompletableFuture<Void> completeFuture = processRequestWithRetries(consumer, retryPolicy);
+        CompletableFuture<Void> completeFuture =
+                processRequestWithRetries(retryPolicy, s -> {
+                    try {
+                        super.mutateRow(rm);
+                    } catch (IOException e) {
+                        throw new RetryPolicyException();
+                    }
+                });
         try {
             completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | TimeoutException | ExecutionException e) {
             String tableName = getAlternativeTableName();
-            Consumer<Void> putTask = s -> {
+
+            performOperationWithAlternativeTable(s -> {
                 try {
                     getTable(tableName).mutateRow(rm);
                 } catch (IOException e1) {
                     e1.printStackTrace();
                 }
-            };
-            performOperationWithAlternativeTable(putTask);
+            });
         }
     }
 
@@ -430,26 +450,26 @@ public class EnhancedHTable extends HTable {
      * @param retryPolicy Data for configuration retry policy for this operation.
      */
     public void put(Put put, RetryPolicy retryPolicy) {
-        Consumer<Void> consumer = s -> {
-            try {
-                super.put(put);
-            } catch (IOException e) {
-                throw new RetryPolicyException();
-            }
-        };
-        CompletableFuture<Void> completeFuture = processRequestWithRetries(consumer, retryPolicy);
+        CompletableFuture<Void> completeFuture =
+                processRequestWithRetries(retryPolicy, s -> {
+                    try {
+                        super.put(put);
+                    } catch (IOException e) {
+                        throw new RetryPolicyException();
+                    }
+                });
         try {
             completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | TimeoutException | ExecutionException e) {
             String tableName = getAlternativeTableName();
-            Consumer<Void> putTask = s -> {
+
+            performOperationWithAlternativeTable(s -> {
                 try {
                     getTable(tableName).put(put);
                 } catch (IOException e1) {
                     e1.printStackTrace();
                 }
-            };
-            performOperationWithAlternativeTable(putTask);
+            });
         }
     }
 
@@ -491,11 +511,11 @@ public class EnhancedHTable extends HTable {
     /**
      * Process the request provided by consumer using provided RetryPolicy
      *
-     * @param consumer    request
      * @param retryPolicy retry policy
+     * @param consumer    request
      * @return result of action
      */
-    private CompletableFuture<Void> processRequestWithRetries(Consumer<Void> consumer, RetryPolicy retryPolicy) {
+    private CompletableFuture<Void> processRequestWithRetries(RetryPolicy retryPolicy, Consumer<Void> consumer) {
         return CompletableFuture.supplyAsync(() -> {
             int numberOfRetries = retryPolicy.getNumberOfRetries();
             while (numberOfRetries != 0) {
@@ -513,11 +533,11 @@ public class EnhancedHTable extends HTable {
     /**
      * Process the request provided by supplier using provided RetryPolicy
      *
-     * @param supplier    request
      * @param retryPolicy retry policy
+     * @param supplier    request
      * @return result of action
      */
-    private CompletableFuture<Boolean> processRequestWithRetries(Supplier<Boolean> supplier, RetryPolicy retryPolicy) {
+    private CompletableFuture<Boolean> processRequestWithRetries(RetryPolicy retryPolicy, Supplier<Boolean> supplier) {
         return CompletableFuture.supplyAsync(() -> {
             int numberOfRetries = retryPolicy.getNumberOfRetries();
             while (numberOfRetries != 0) {
