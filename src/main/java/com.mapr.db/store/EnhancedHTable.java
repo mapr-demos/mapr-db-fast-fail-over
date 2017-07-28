@@ -113,8 +113,8 @@ public class EnhancedHTable extends HTable {
      */
     @Override
     public boolean checkAndDelete(byte[] row,
-                                  byte[] family, byte[] qualifier, byte[] value,
-                                  Delete delete) {
+            byte[] family, byte[] qualifier, byte[] value,
+            Delete delete) {
         return checkAndDelete(row, family, qualifier, value, delete, policy);
     }
 
@@ -125,8 +125,8 @@ public class EnhancedHTable extends HTable {
      * @return true if operation successful, false if some trouble was occurred.
      */
     public boolean checkAndDelete(byte[] row,
-                                  byte[] family, byte[] qualifier, byte[] value,
-                                  Delete delete, RetryPolicy retryPolicy) {
+            byte[] family, byte[] qualifier, byte[] value,
+            Delete delete, RetryPolicy retryPolicy) {
         CompletableFuture<Boolean> completableFuture =
                 processRequestWithRetries(retryPolicy, () -> {
                     try {
@@ -154,8 +154,8 @@ public class EnhancedHTable extends HTable {
      */
     @Override
     public boolean checkAndDelete(byte[] row, byte[] family,
-                                  byte[] qualifier, CompareFilter.CompareOp compareOp, byte[] value,
-                                  Delete delete) {
+            byte[] qualifier, CompareFilter.CompareOp compareOp, byte[] value,
+            Delete delete) {
         return checkAndDelete(row, family, qualifier, compareOp, value, delete, policy);
     }
 
@@ -166,8 +166,8 @@ public class EnhancedHTable extends HTable {
      * @return true if operation successful, false if some trouble was occurred.
      */
     public boolean checkAndDelete(byte[] row, byte[] family,
-                                  byte[] qualifier, CompareFilter.CompareOp compareOp, byte[] value,
-                                  Delete delete, RetryPolicy retryPolicy) {
+            byte[] qualifier, CompareFilter.CompareOp compareOp, byte[] value,
+            Delete delete, RetryPolicy retryPolicy) {
         CompletableFuture<Boolean> completeFuture =
                 processRequestWithRetries(retryPolicy, () -> {
                     try {
@@ -196,8 +196,8 @@ public class EnhancedHTable extends HTable {
      */
     @Override
     public boolean checkAndMutate(byte[] row, byte[] family, byte[] qualifier,
-                                  CompareFilter.CompareOp compareOp, byte[] value,
-                                  RowMutations rm) {
+            CompareFilter.CompareOp compareOp, byte[] value,
+            RowMutations rm) {
         return checkAndMutate(row, family, qualifier, compareOp, value, rm, policy);
     }
 
@@ -208,8 +208,8 @@ public class EnhancedHTable extends HTable {
      * @return
      */
     public boolean checkAndMutate(byte[] row, byte[] family, byte[] qualifier,
-                                  CompareFilter.CompareOp compareOp, byte[] value,
-                                  RowMutations rm, RetryPolicy retryPolicy) {
+            CompareFilter.CompareOp compareOp, byte[] value,
+            RowMutations rm, RetryPolicy retryPolicy) {
         CompletableFuture<Boolean> completeFuture =
                 processRequestWithRetries(retryPolicy, () -> {
                     try {
@@ -238,8 +238,8 @@ public class EnhancedHTable extends HTable {
      */
     @Override
     public boolean checkAndPut(byte[] row,
-                               byte[] family, byte[] qualifier, byte[] value,
-                               Put put) {
+            byte[] family, byte[] qualifier, byte[] value,
+            Put put) {
         return checkAndPut(row, family, qualifier, value, put, policy);
     }
 
@@ -250,8 +250,8 @@ public class EnhancedHTable extends HTable {
      * @return
      */
     public boolean checkAndPut(byte[] row,
-                               byte[] family, byte[] qualifier, byte[] value,
-                               Put put, RetryPolicy retryPolicy) {
+            byte[] family, byte[] qualifier, byte[] value,
+            Put put, RetryPolicy retryPolicy) {
         CompletableFuture<Boolean> completeFuture =
                 processRequestWithRetries(retryPolicy, () -> {
                     try {
