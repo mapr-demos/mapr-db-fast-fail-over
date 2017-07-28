@@ -1,86 +1,69 @@
 package com.mapr.db.policy;
 
-import lombok.Getter;
+import lombok.*;
 import org.codehaus.jackson.map.ObjectMapper;
 
-import java.io.IOException;
-
+/**
+ * The idea of the Retry Policy is to allow the developer
+ * to configured at the table, operation level the behavior
+ * of this operation:
+ * <p>
+ * DefaultRetryPolicy : standard MapR DB API behavior, wait until
+ * the fail over is over, or time out based on TCP configuration.
+ * <p>
+ * The developer can create an instance of a RetryPolicy that will be
+ * used/defined at different levels: (see below for detail requirements)
+ * <ul>
+ * <li>Overall Configuration</li>
+ * <li>Table</li>
+ * <li>Operation</li>
+ * </ul>
+ */
 @Getter
+@ToString
+@Builder(toBuilder = true)
+@AllArgsConstructor
+@NoArgsConstructor
 public class RetryPolicy {
 
-  private final long timeout;
-  private final int numOfRetries;
-  private final String alternateTable;
-  private final String alternateSuffix;
+    /**
+     * the number of ms to wait before
+     * the operation is send to the other
+     * table/retried, default value to 100ms
+     */
+    @lombok.Builder.Default
+    private long timeout = 100;
 
-  private RetryPolicy(Builder builder) {
-    this.timeout = builder.timeout;
-    this.numOfRetries = builder.numOfRetries;
-    this.alternateTable = builder.alternateTable;
-    this.alternateSuffix = builder.alternateSuffix;
-  }
+    /**
+     * the number of retries before raising
+     * an operation exception, default value 3
+     */
+    @lombok.Builder.Default
+    private int numberOfRetries = 3;
 
-  public RetryPolicy() {
-    this.timeout = 0;
-    this.numOfRetries = 0;
-    this.alternateTable = null;
-    this.alternateSuffix = null;
-  }
-
-  public String toJson() {
-    return convertToJson();
-  }
-
-  private String convertToJson() {
-    try {
-      return new ObjectMapper().writeValueAsString(this);
-    } catch (IOException e) {
-      return "{}";
-    }
-  }
-
-  @Override
-  public String toString() {
-    return "RetryPolicy{" +
-        "timeout=" + timeout +
-        ", numOfRetries=" + numOfRetries +
-        ", alternateTable='" + alternateTable + '\'' +
-        ", alternateSuffix='" + alternateSuffix + '\'' +
-        '}';
-  }
-
-  public static class Builder {
-
-    private long timeout;
-    private int numOfRetries;
+    /**
+     * the name of the table used for the fail over/replication,
+     * for example   /apps/tables/user_data_fo
+     */
     private String alternateTable;
+
+    /**
+     * if the table name is not specified, it is possible to set a suffix,
+     * for example _fo that will be used by all objects where this policy is set.
+     */
     private String alternateSuffix;
 
-    public Builder() {
+    /**
+     * Returns RetryPolicy object as Json representation.
+     *
+     * @return String with serialized to Json object.
+     */
+    public String toJson() {
+        return convertToJson();
     }
 
-    public Builder setTimeout(long timeout) {
-      this.timeout = timeout;
-      return this;
+    @SneakyThrows
+    private String convertToJson() {
+        return new ObjectMapper().writeValueAsString(this);
     }
-
-    public Builder setNumOfReties(int numOfReties) {
-      this.numOfRetries = numOfReties;
-      return this;
-    }
-
-    public Builder setAlternateTable(String alternateTable) {
-      this.alternateTable = alternateTable;
-      return this;
-    }
-
-    public Builder setAlternateSuffix(String alternateSuffix) {
-      this.alternateSuffix = alternateSuffix;
-      return this;
-    }
-
-    public RetryPolicy build() {
-      return new RetryPolicy(this);
-    }
-  }
 }
