@@ -56,6 +56,7 @@ public class EnhancedHTable extends HTable {
      * @throws IOException if a remote or network exception occurs
      */
     public EnhancedHTable(Configuration configuration, String tableName) throws IOException {
+        // TODO why is a deprecated constructor being used?
         super(configuration, tableName);
         this.policy = getPolicyFrom(configuration);
     }
@@ -68,7 +69,9 @@ public class EnhancedHTable extends HTable {
      * @param retryPolicy   Data for configuration retry policy.
      * @throws IOException if a remote or network exception occurs
      */
+    // TODO why is a private field being passed as an argument here? That makes no sense.
     public EnhancedHTable(Configuration configuration, String table, RetryPolicy retryPolicy) throws IOException {
+        // TODO why is a deprecated constructor being used?
         super(configuration, table);
         this.policy = retryPolicy;
     }
@@ -89,6 +92,7 @@ public class EnhancedHTable extends HTable {
      * @return Single row result of a query.<p>
      */
     public Result append(Append append, RetryPolicy retryPolicy) {
+        // TODO this logic looks wrong. It doesn't implement the required semantics.
         CompletableFuture<Result> completeFuture =
                 CompletableFuture.supplyAsync(() -> {
                     int numberOfRetries = retryPolicy.getNumberOfRetries();
@@ -99,11 +103,16 @@ public class EnhancedHTable extends HTable {
                             numberOfRetries--;
                         }
                     }
+                    // TODO this is not acceptable to throw an anonymous exception with no message.
                     throw new RuntimeException();
                 });
         try {
+            // TODO simple timeouts are not good enough
             return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
+            // TODO handling all these exceptions the same way is incorrect. Execution and timeout are very different.
+            // TODO Interruptions is not the same as an error
         } catch (InterruptedException | TimeoutException | ExecutionException e) {
+            // TODO must have a message at least to explain what happened
             throw new RetryPolicyException();
         }
     }
@@ -115,6 +124,7 @@ public class EnhancedHTable extends HTable {
     public boolean checkAndDelete(byte[] row,
             byte[] family, byte[] qualifier, byte[] value,
             Delete delete) {
+        // TODO again, passing a field to a local method is nuts
         return checkAndDelete(row, family, qualifier, value, delete, policy);
     }
 
@@ -132,6 +142,7 @@ public class EnhancedHTable extends HTable {
                     try {
                         return super.checkAndDelete(row, family, qualifier, value, delete);
                     } catch (IOException e) {
+                        // TODO must have message
                         throw new RetryPolicyException();
                     }
                 });
@@ -141,8 +152,11 @@ public class EnhancedHTable extends HTable {
             String tableName = getAlternativeTableName();
             return performOperationWithAlternativeTable(() -> {
                 try {
+                    // TODO this is wrong. The alternate table should be open all the time.
+                    // TODO failover should close the main table to be re-opened on failback
                     return getTable(tableName).checkAndDelete(row, family, qualifier, value, delete);
                 } catch (IOException e1) {
+                    // TODO must have message
                     throw new RetryPolicyException();
                 }
             });
@@ -179,10 +193,13 @@ public class EnhancedHTable extends HTable {
         try {
             return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | TimeoutException | ExecutionException e) {
+            // TODO can't handle all exceptions the same way
             String tableName = getAlternativeTableName();
 
             return performOperationWithAlternativeTable(() -> {
                 try {
+                    // TODO this is wrong. The alternate table should be open all the time.
+                    // TODO failover should close the main table to be re-opened on failback
                     return getTable(tableName).checkAndDelete(row, family, qualifier, compareOp, value, delete);
                 } catch (IOException e1) {
                     throw new RetryPolicyException();
@@ -215,18 +232,23 @@ public class EnhancedHTable extends HTable {
                     try {
                         return super.checkAndMutate(row, family, qualifier, compareOp, value, rm);
                     } catch (IOException e) {
+                        // TODO must have message
                         throw new RetryPolicyException();
                     }
                 });
         try {
             return completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | TimeoutException | ExecutionException e) {
+            // TODO can't handle all exceptions the same way
             String tableName = getAlternativeTableName();
 
             return performOperationWithAlternativeTable(() -> {
                 try {
+                    // TODO this is wrong. The alternate table should be open all the time.
+                    // TODO failover should close the main table to be re-opened on failback
                     return getTable(tableName).checkAndMutate(row, family, qualifier, compareOp, value, rm);
                 } catch (IOException e1) {
+                    // TODO must have message
                     throw new RetryPolicyException();
                 }
             });
@@ -257,6 +279,7 @@ public class EnhancedHTable extends HTable {
                     try {
                         return super.checkAndPut(row, family, qualifier, value, put);
                     } catch (IOException e) {
+                        // TODO must have message
                         throw new RetryPolicyException();
                     }
                 });
@@ -266,9 +289,12 @@ public class EnhancedHTable extends HTable {
             String tableName = getAlternativeTableName();
 
             return performOperationWithAlternativeTable(() -> {
+                // TODO this is wrong. The alternate table should be open all the time.
+                // TODO failover should close the main table to be re-opened on failback
                 try {
                     return getTable(tableName).checkAndPut(row, family, qualifier, value, put);
                 } catch (IOException e1) {
+                    // TODO must have message
                     throw new RetryPolicyException();
                 }
             });
@@ -313,12 +339,14 @@ public class EnhancedHTable extends HTable {
                     try {
                         super.delete(deletes);
                     } catch (IOException e) {
+                        // TODO must have message
                         throw new RetryPolicyException();
                     }
                 });
         try {
             completeFuture.get(policy.getTimeout(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | TimeoutException | ExecutionException e) {
+            // TODO must have message
             throw new RetryPolicyException();
         }
     }
@@ -344,6 +372,7 @@ public class EnhancedHTable extends HTable {
                     try {
                         return super.exists(get);
                     } catch (IOException e) {
+                        // TODO must have message
                         throw new RetryPolicyException();
                     }
                 });
@@ -353,11 +382,16 @@ public class EnhancedHTable extends HTable {
             String tableName = getAlternativeTableName();
             Supplier<Boolean> putTask = () -> {
                 try {
+                    // TODO this is wrong. The alternate table should be open all the time.
+                    // TODO failover should close the main table to be re-opened on failback
                     return getTable(tableName).exists(get);
                 } catch (IOException e1) {
+                    // TODO must have message
                     throw new RetryPolicyException();
                 }
             };
+            // TODO this is wrong. The alternate table should be open all the time.
+            // TODO failover should close the main table to be re-opened on failback
             return performOperationWithAlternativeTable(putTask);
         }
     }
@@ -387,6 +421,7 @@ public class EnhancedHTable extends HTable {
                             numberOfRetries--;
                         }
                     }
+                    // TODO must have message
                     throw new RuntimeException();
                 });
         try {
@@ -395,6 +430,7 @@ public class EnhancedHTable extends HTable {
             if (isAlternateTableExist(policy)) {
                 return getTable(policy.getAlternateTable()).existsAll(gets);
             }
+            // TODO must have message
             throw new RetryPolicyException();
         }
     }
@@ -418,6 +454,7 @@ public class EnhancedHTable extends HTable {
                     try {
                         super.mutateRow(rm);
                     } catch (IOException e) {
+                        // TODO must have message
                         throw new RetryPolicyException();
                     }
                 });
@@ -428,8 +465,12 @@ public class EnhancedHTable extends HTable {
 
             performOperationWithAlternativeTable(s -> {
                 try {
+                    // TODO this is wrong. The alternate table should be open all the time.
+                    // TODO failover should close the main table to be re-opened on failback
                     getTable(tableName).mutateRow(rm);
                 } catch (IOException e1) {
+                    // TODO printing a stack trace is never acceptable
+                    // TODO an IOException should be passed back
                     e1.printStackTrace();
                 }
             });
@@ -455,6 +496,7 @@ public class EnhancedHTable extends HTable {
                     try {
                         super.put(put);
                     } catch (IOException e) {
+                        // TODO must have message
                         throw new RetryPolicyException();
                     }
                 });
@@ -465,6 +507,8 @@ public class EnhancedHTable extends HTable {
 
             performOperationWithAlternativeTable(s -> {
                 try {
+                    // TODO this is wrong. The alternate table should be open all the time.
+                    // TODO failover should close the main table to be re-opened on failback
                     getTable(tableName).put(put);
                 } catch (IOException e1) {
                     e1.printStackTrace();
@@ -482,12 +526,14 @@ public class EnhancedHTable extends HTable {
     }
 
     private void performOperationWithAlternativeTable(Consumer<Void> consumer) {
+        // TODO What is all this logging? The failover event should be logged, not every operation
         printInfoAboutAlternativeTable();
         consumer.accept(null);
         log.info("Success!");
     }
 
     private Boolean performOperationWithAlternativeTable(Supplier<Boolean> supplier) {
+        // TODO What is all this logging? The failover event should be logged, not every operation
         printInfoAboutAlternativeTable();
         return supplier.get();
     }
@@ -526,6 +572,7 @@ public class EnhancedHTable extends HTable {
                     numberOfRetries--;
                 }
             }
+            // TODO must have message
             throw new RuntimeException();
         });
     }
@@ -547,6 +594,7 @@ public class EnhancedHTable extends HTable {
                     numberOfRetries--;
                 }
             }
+            // TODO must have message
             throw new RuntimeException();
         });
     }

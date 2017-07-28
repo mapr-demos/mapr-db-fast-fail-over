@@ -3,6 +3,8 @@ package com.mapr.db.policy;
 import lombok.*;
 import org.codehaus.jackson.map.ObjectMapper;
 
+// TODO why is there a single class in a package? The name of the package is even in the
+// class name.
 /**
  * The idea of the Retry Policy is to allow the developer
  * to configured at the table, operation level the behavior
@@ -32,6 +34,7 @@ public class RetryPolicy {
      * table/retried, default value to 100ms
      */
     @lombok.Builder.Default
+    // TODO the failure strategy is wrong. There should be multiple timeouts and after a timeout, all operations should go to the secondary for a time
     private long timeout = 100;
 
     /**
@@ -41,6 +44,7 @@ public class RetryPolicy {
     @lombok.Builder.Default
     private int numberOfRetries = 3;
 
+    // TODO this is wrong. The alternate should be kept open.
     /**
      * the name of the table used for the fail over/replication,
      * for example   /apps/tables/user_data_fo
