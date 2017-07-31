@@ -1,33 +1,63 @@
 package com.mapr.db;
 
-import lombok.experimental.UtilityClass;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Connection;
-import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Table;
+import org.ojai.store.DocumentStore;
+import org.ojai.store.DriverManager;
 
 import java.io.IOException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-@UtilityClass
 public class Util {
 
     /**
      * This method check if the table exist,
-     * and create Table object that used for manipulation with table.
+     * and create Table object that used for manipulation with binary table.
+     * <p>
+     * If table doesn't exist it will create table in db.
+     *
+     * @param conn      Connection to the cluster
+     * @param tableName Name that correspond to db table name
+     * @return org.apache.hadoop.hbase.client.Table
+     */
+    public static Table getBinaryTable(Connection conn, String tableName) {
+        try {
+            return getTableFromCluster(conn, tableName);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * This method check if the table exist,
+     * and create Table object that used for manipulation with Json table.
      * <p>
      * If table doesn't exist it will create table in db.
      *
      * @param tableName Name that correspond to db table name
-     * @return Table
-     * @throws IOException if will be some issue with db
+     * @return com.mapr.db.Table
      */
-    public static Table getTable(String tableName) throws IOException {
-        Configuration conf = HBaseConfiguration.create();
-        Connection conn = ConnectionFactory.createConnection(conf);
+    public static DocumentStore getJsonTable(String tableName) {
+        org.ojai.store.Connection connection = DriverManager.getConnection("ojai:mapr:");
+        return connection.getStore(tableName);
+    }
+
+    /**
+     * @param switched Field which need to switch after period of time
+     */
+    public static void createAndExecuteTaskForSwitchingTableBack(AtomicBoolean switched) {
+        ScheduledExecutorService scheduler =
+                Executors.newScheduledThreadPool(1);
+        scheduler.schedule(() -> switched.set(false), 1000, TimeUnit.MILLISECONDS);
+    }
+
+    private static Table getTableFromCluster(Connection conn, String tableName) throws IOException {
         org.apache.hadoop.hbase.client.Admin admin = conn.getAdmin();
 
         TableName tableNameValue = TableName.valueOf(tableName);
