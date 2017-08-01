@@ -16,6 +16,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Util {
 
+    final static String DB_DRIVER_NAME = "ojai:mapr:";
+
     /**
      * This method check if the table exist,
      * and create Table object that used for manipulation with binary table.
@@ -40,11 +42,13 @@ public class Util {
      * <p>
      * If table doesn't exist it will create table in db.
      *
-     * @param tableName Name that correspond to db table name
+     * @param clusterPath Path to the cluster
+     * @param tableName   Name that correspond to db table name
      * @return com.mapr.db.Table
      */
-    public static DocumentStore getJsonTable(String tableName) {
-        org.ojai.store.Connection connection = DriverManager.getConnection("ojai:mapr:");
+    public static DocumentStore getJsonTable(String clusterPath, String tableName) {
+        org.ojai.store.Connection connection =
+                DriverManager.getConnection(DB_DRIVER_NAME + clusterPath);
         return connection.getStore(tableName);
     }
 
