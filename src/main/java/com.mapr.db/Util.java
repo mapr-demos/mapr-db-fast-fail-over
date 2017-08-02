@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Util {
 
-    final static String DB_DRIVER_NAME = "ojai:mapr:";
+    private static final String DB_DRIVER_NAME = "ojai:mapr:";
 
     /**
      * This method check if the table exist,

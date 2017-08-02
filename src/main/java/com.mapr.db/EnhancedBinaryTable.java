@@ -18,7 +18,8 @@ import static com.mapr.db.Util.getBinaryTable;
 
 public class EnhancedBinaryTable {
 
-    private static final Logger log = LoggerFactory.getLogger(EnhancedBinaryTable.class);
+    private static final Logger LOG =
+            LoggerFactory.getLogger(EnhancedBinaryTable.class);
 
     private Table primary;
     private Table alternate;
@@ -40,7 +41,7 @@ public class EnhancedBinaryTable {
                         return null;
                     });
             completableFuture.exceptionally(throwable -> {
-                log.error("Problem", throwable);
+                LOG.error("Problem", throwable);
                 return null;
             });
             try {

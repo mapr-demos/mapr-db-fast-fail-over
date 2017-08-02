@@ -17,7 +17,7 @@ import static com.mapr.db.Util.getJsonTable;
 
 public class EnhancedJSONTable {
 
-    private static final Logger log =
+    private static final Logger LOG =
             LoggerFactory.getLogger(EnhancedBinaryTable.class);
 
     private DocumentStore primary;
@@ -37,38 +37,66 @@ public class EnhancedJSONTable {
         this.timeOut = timeOut;
     }
 
-    public void insert(Document document) throws IOException, InterruptedException, ExecutionException {
-        if (!switched.get()) {
-            CompletableFuture<Void> primaryFuture =
-                    CompletableFuture.runAsync(() -> primary.insert(document));
-            primaryFuture.exceptionally(throwable -> {
-                log.error("Problem while execution", throwable);
+    public void insert(Document document) {
+        try {
+            tryInsert(document);
+        } catch (IOException | InterruptedException | ExecutionException e) {
+            LOG.error("Problem while execution ", e);
+            e.printStackTrace();
+        }
+    }
+
+    private void tryInsert(Document document) throws IOException, InterruptedException, ExecutionException {
+        if (isTableSwitched()) {
+            LOG.info("Perform operation with second table, because primary too slow");
+            secondary.insert(document);
+        } else {
+            performRetryLogic(() -> {
+                primary.insert(document);
+                LOG.info("Operation performed with primary table");
+            }, () -> {
+                secondary.insert(document);
+                LOG.info("Operation performed with secondary table");
+            });
+        }
+    }
+
+    private void performRetryLogic(Runnable primaryTask,
+                                   Runnable secondaryTask)
+            throws ExecutionException, InterruptedException {
+
+        CompletableFuture<Void> primaryFuture =
+                CompletableFuture.runAsync(primaryTask);
+
+        primaryFuture.exceptionally(throwable -> {
+            LOG.error("Problem while execution with primary table ", throwable);
+            throw new RuntimeException(throwable);
+        });
+
+        try {
+            primaryFuture.get(timeOut, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+
+            LOG.error("Processing request to primary table too long");
+            LOG.info("Switched table to secondary for a 1000 ms");
+
+            switched.set(true);
+            createAndExecuteTaskForSwitchingTableBack(switched);
+
+            LOG.info("Try to perform operation with secondary table");
+            CompletableFuture<Void> secondaryFuture =
+                    CompletableFuture.runAsync(secondaryTask);
+
+            secondaryFuture.exceptionally(throwable -> {
+                LOG.error("Problem while execution", throwable);
                 throw new RuntimeException(throwable);
             });
-
-            try {
-                primaryFuture.get(timeOut, TimeUnit.MILLISECONDS);
-            } catch (TimeoutException e) {
-
-                log.error("Processing request to primary table too long");
-                log.info("Switched table to secondary for a 1000 ms");
-
-                switched.set(true);
-                createAndExecuteTaskForSwitchingTableBack(switched);
-
-                log.info("Try to perform operation with secondary table");
-                CompletableFuture<Void> secondaryFuture =
-                        CompletableFuture.runAsync(() -> secondary.insert(document));
-
-                secondaryFuture.exceptionally(throwable -> {
-                    log.error("Problem while execution", throwable);
-                    throw new RuntimeException(throwable);
-                });
-                secondaryFuture.acceptEitherAsync(primaryFuture, s -> { });
-            }
-        } else {
-            log.info("Perform operation with second table, because primary too slow");
-            secondary.insert(document);
+            secondaryFuture.acceptEitherAsync(primaryFuture, s -> {
+            });
         }
+    }
+
+    private boolean isTableSwitched() {
+        return switched.get();
     }
 }
