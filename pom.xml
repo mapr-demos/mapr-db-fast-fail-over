@@ -57,11 +57,12 @@
     </build>
 
     <dependencies>
-        <dependency>
-            <groupId>org.apache.hbase</groupId>
-            <artifactId>hbase-client</artifactId>
-            <version>1.1.1-mapr-1602-m7-5.2.0</version>
-        </dependency>
+        <!--<dependency>-->
+            <!--<groupId>org.apache.hbase</groupId>-->
+            <!--<artifactId>hbase-client</artifactId>-->
+            <!--<version>1.1.1-mapr-1602-m7-5.2.0</version>-->
+            <!--<scope>compile</scope>-->
+        <!--</dependency>-->
 
         <dependency>
             <artifactId>mapr-ojai-driver</artifactId>

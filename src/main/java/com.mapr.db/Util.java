@@ -1,14 +1,8 @@
 package com.mapr.db;
 
-import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.HTableDescriptor;
-import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.Connection;
-import org.apache.hadoop.hbase.client.Table;
 import org.ojai.store.DocumentStore;
 import org.ojai.store.DriverManager;
 
-import java.io.IOException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -28,13 +22,13 @@ public class Util {
      * @param tableName Name that correspond to db table name
      * @return org.apache.hadoop.hbase.client.Table
      */
-    public static Table getBinaryTable(Connection conn, String tableName) {
-        try {
-            return getTableFromCluster(conn, tableName);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
+//    public static Table getBinaryTable(Connection conn, String tableName) {
+//        try {
+//            return getTableFromCluster(conn, tableName);
+//        } catch (IOException e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
 
     /**
      * This method check if the table exist,
@@ -61,15 +55,15 @@ public class Util {
         scheduler.schedule(() -> switched.set(false), 1000, TimeUnit.MILLISECONDS);
     }
 
-    private static Table getTableFromCluster(Connection conn, String tableName) throws IOException {
-        org.apache.hadoop.hbase.client.Admin admin = conn.getAdmin();
-
-        TableName tableNameValue = TableName.valueOf(tableName);
-
-        if (!admin.tableExists(tableNameValue)) {
-            admin.createTable(new HTableDescriptor(tableNameValue).addFamily(new HColumnDescriptor("default")));
-        }
-
-        return conn.getTable(tableNameValue);
-    }
+//    private static Table getTableFromCluster(Connection conn, String tableName) throws IOException {
+//        org.apache.hadoop.hbase.client.Admin admin = conn.getAdmin();
+//
+//        TableName tableNameValue = TableName.valueOf(tableName);
+//
+//        if (!admin.tableExists(tableNameValue)) {
+//            admin.createTable(new HTableDescriptor(tableNameValue).addFamily(new HColumnDescriptor("default")));
+//        }
+//
+//        return conn.getTable(tableNameValue);
+//    }
 }

@@ -20,7 +20,7 @@ import static com.mapr.db.Util.getJsonTable;
 public class EnhancedJSONTable {
 
     private static final Logger LOG =
-            LoggerFactory.getLogger(EnhancedBinaryTable.class);
+            LoggerFactory.getLogger(EnhancedJSONTable.class);
 
     private DocumentStore primary;
     private DocumentStore secondary;
@@ -31,7 +31,7 @@ public class EnhancedJSONTable {
             new AtomicBoolean(false);
 
     public EnhancedJSONTable(String primaryClusterURL, String primaryTable,
-            String secondaryClusterURL, String secondaryTable, long timeOut) {
+                             String secondaryClusterURL, String secondaryTable, long timeOut) {
         this.primary =
                 getJsonTable(primaryClusterURL, primaryTable);
         this.secondary =
@@ -48,6 +48,16 @@ public class EnhancedJSONTable {
         }
     }
 
+    public DocumentStream find() {
+        try {
+            return tryFind();
+        } catch (IOException | InterruptedException | ExecutionException e) {
+            LOG.error("Problem while execution ", e);
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
     public DocumentStream find(QueryCondition query) {
         try {
             return tryFind(query);
@@ -56,7 +66,15 @@ public class EnhancedJSONTable {
             e.printStackTrace();
             throw new RuntimeException(e);
         }
+    }
 
+    private DocumentStream tryFind() throws IOException, InterruptedException, ExecutionException {
+        if (isTableSwitched()) {
+            LOG.info("Perform operation with second table, because primary too slow");
+            return secondary.find();
+        } else {
+            return performRetryLogicWithOutputData(() -> primary.find(), () -> secondary.find());
+        }
     }
 
     private DocumentStream tryFind(QueryCondition query) throws IOException, InterruptedException, ExecutionException {
@@ -67,7 +85,6 @@ public class EnhancedJSONTable {
             return performRetryLogicWithOutputData(() -> primary.find(query), () -> secondary.find(query));
         }
     }
-
 
     private void tryInsert(Document document) throws IOException, InterruptedException, ExecutionException {
         if (isTableSwitched()) {
@@ -85,7 +102,7 @@ public class EnhancedJSONTable {
     }
 
     private void performRetryLogic(Runnable primaryTask,
-            Runnable secondaryTask)
+                                   Runnable secondaryTask)
             throws ExecutionException, InterruptedException {
 
         CompletableFuture<Void> primaryFuture =
