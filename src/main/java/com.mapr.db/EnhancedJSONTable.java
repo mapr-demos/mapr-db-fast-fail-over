@@ -1,5 +1,6 @@
 package com.mapr.db;
 
+import com.mapr.db.exception.RetryPolicyException;
 import org.ojai.Document;
 import org.ojai.DocumentStream;
 import org.ojai.store.DocumentStore;
@@ -15,6 +16,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
+//import static com.mapr.db.Util.createAndExecuteTaskForSwitchingTableBack;
 import static com.mapr.db.Util.getJsonTable;
 
 public class EnhancedJSONTable {
@@ -30,12 +32,12 @@ public class EnhancedJSONTable {
     private AtomicBoolean switched =
             new AtomicBoolean(false);
 
-    public EnhancedJSONTable(String primaryClusterURL, String primaryTable,
-                             String secondaryClusterURL, String secondaryTable, long timeOut) {
+    public EnhancedJSONTable(String primaryTable, String secondaryTable,
+                             long timeOut) {
         this.primary =
-                getJsonTable(primaryClusterURL, primaryTable);
+                getJsonTable(primaryTable);
         this.secondary =
-                getJsonTable(secondaryClusterURL, secondaryTable);
+                getJsonTable(secondaryTable);
         this.timeOut = timeOut;
     }
 
@@ -44,7 +46,7 @@ public class EnhancedJSONTable {
             tryInsert(document);
         } catch (IOException | InterruptedException | ExecutionException e) {
             LOG.error("Problem while execution ", e);
-            e.printStackTrace();
+            throw new RetryPolicyException(e);
         }
     }
 
@@ -53,8 +55,7 @@ public class EnhancedJSONTable {
             return tryFind();
         } catch (IOException | InterruptedException | ExecutionException e) {
             LOG.error("Problem while execution ", e);
-            e.printStackTrace();
-            throw new RuntimeException(e);
+            throw new RetryPolicyException(e);
         }
     }
 
@@ -63,8 +64,7 @@ public class EnhancedJSONTable {
             return tryFind(query);
         } catch (IOException | InterruptedException | ExecutionException e) {
             LOG.error("Problem while execution ", e);
-            e.printStackTrace();
-            throw new RuntimeException(e);
+            throw new RetryPolicyException(e);
         }
     }
 
@@ -110,7 +110,7 @@ public class EnhancedJSONTable {
 
         primaryFuture.exceptionally(throwable -> {
             LOG.error("Problem while execution with primary table ", throwable);
-            throw new RuntimeException(throwable);
+            throw new RetryPolicyException(throwable);
         });
 
         try {
@@ -121,7 +121,7 @@ public class EnhancedJSONTable {
             LOG.info("Switched table to secondary for a 1000 ms");
 
             switched.set(true);
-            //createAndExecuteTaskForSwitchingTableBack(switched);
+//            createAndExecuteTaskForSwitchingTableBack(switched);
 
             LOG.info("Try to perform operation with secondary table");
             CompletableFuture<Void> secondaryFuture =
@@ -137,7 +137,7 @@ public class EnhancedJSONTable {
     }
 
     private <R> R performRetryLogicWithOutputData(Supplier<R> primaryTask,
-            Supplier<R> secondaryTask)
+                                                  Supplier<R> secondaryTask)
             throws ExecutionException, InterruptedException {
 
         CompletableFuture<R> primaryFuture =
@@ -145,7 +145,7 @@ public class EnhancedJSONTable {
 
         primaryFuture.exceptionally(throwable -> {
             LOG.error("Problem while execution with primary table ", throwable);
-            throw new RuntimeException(throwable);
+            throw new RetryPolicyException(throwable);
         });
 
         try {
@@ -164,7 +164,7 @@ public class EnhancedJSONTable {
 
             secondaryFuture.exceptionally(throwable -> {
                 LOG.error("Problem while execution", throwable);
-                throw new RuntimeException(throwable);
+                throw new RetryPolicyException(throwable);
             });
             return secondaryFuture.join();
         }

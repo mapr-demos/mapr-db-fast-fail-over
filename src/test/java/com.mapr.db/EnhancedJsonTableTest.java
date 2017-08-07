@@ -20,9 +20,6 @@ public class EnhancedJsonTableTest {
 
     private static final String DRIVER_NAME = "ojai:mapr:";
 
-    private static final String PRIMARY_CLUSTER = "";
-    private static final String SECONDARY_CLUSTER = "";
-
     private static final String PRIMARY_TABLE = "/mapr/cluster1/apps/user_profile";
     private static final String SECONDARY_TABLE = "/mapr/cluster2/apps/user_profile";
 
@@ -33,16 +30,15 @@ public class EnhancedJsonTableTest {
     @Ignore("Needs configuration data for the two reachable clusters")
     public void testInsert() throws InterruptedException {
         Connection primaryConn =
-                DriverManager.getConnection(DRIVER_NAME + PRIMARY_CLUSTER);
-        Connection secondaryConn =
-                DriverManager.getConnection(DRIVER_NAME + SECONDARY_CLUSTER);
+                DriverManager.getConnection(DRIVER_NAME);
+//        Connection secondaryConn =
+//                DriverManager.getConnection(DRIVER_NAME);
 
-        DocumentStore primaryStore = primaryConn.getStore(PRIMARY_TABLE);
-        DocumentStore secondaryStore = secondaryConn.getStore(SECONDARY_TABLE);
+//        DocumentStore primaryStore = primaryConn.getStore(PRIMARY_TABLE);
+//        DocumentStore secondaryStore = secondaryConn.getStore(SECONDARY_TABLE);
 
         EnhancedJSONTable jsonTable =
-                new EnhancedJSONTable(PRIMARY_CLUSTER, PRIMARY_TABLE,
-                        SECONDARY_CLUSTER, SECONDARY_TABLE, TIMEOUT);
+                new EnhancedJSONTable(PRIMARY_TABLE, SECONDARY_TABLE, TIMEOUT);
 
         LOG.info("Make requests to the cluster, when both of clusters work");
         makeRequestToDb(jsonTable, primaryConn, 10);
@@ -56,12 +52,8 @@ public class EnhancedJsonTableTest {
         LOG.info("SWITCH ON PRIMARY CLUSTER");
         makeRequestToDb(jsonTable, primaryConn, 10);
 
-
-//        Assert.assertEquals(0, countDocuments(primaryStore));
-//        Assert.assertEquals(NUMBER_OF_REQUESTS, countDocuments(secondaryStore));
-
-        closeStoreAndConn(primaryConn, primaryStore);
-        closeStoreAndConn(secondaryConn, secondaryStore);
+//        closeStoreAndConn(primaryConn, primaryStore);
+//        closeStoreAndConn(secondaryConn, secondaryStore);
     }
 
     private void makeRequestToDb(EnhancedJSONTable jsonTable, Connection connection,
@@ -73,7 +65,8 @@ public class EnhancedJsonTableTest {
         }
     }
 
-    private void closeStoreAndConn(Connection primaryConn, DocumentStore primaryStore) {
+    private void closeStoreAndConn(Connection primaryConn,
+                                   DocumentStore primaryStore) {
         primaryStore.close();
         primaryConn.close();
     }

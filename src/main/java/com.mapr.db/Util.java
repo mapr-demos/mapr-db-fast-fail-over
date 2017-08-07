@@ -36,13 +36,12 @@ public class Util {
      * <p>
      * If table doesn't exist it will create table in db.
      *
-     * @param clusterPath Path to the cluster
-     * @param tableName   Name that correspond to db table name
+     * @param tableName Name that correspond to db table name
      * @return com.mapr.db.Table
      */
-    public static DocumentStore getJsonTable(String clusterPath, String tableName) {
+    public static DocumentStore getJsonTable(String tableName) {
         org.ojai.store.Connection connection =
-                DriverManager.getConnection(DB_DRIVER_NAME + clusterPath);
+                DriverManager.getConnection(DB_DRIVER_NAME);
         return connection.getStore(tableName);
     }
 
