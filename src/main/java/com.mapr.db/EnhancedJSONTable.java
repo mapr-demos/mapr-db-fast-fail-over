@@ -16,8 +16,9 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
-//import static com.mapr.db.Util.createAndExecuteTaskForSwitchingTableBack;
 import static com.mapr.db.Util.getJsonTable;
+
+//import static com.mapr.db.Util.createAndExecuteTaskForSwitchingTableBack;
 
 public class EnhancedJSONTable {
 
@@ -110,7 +111,7 @@ public class EnhancedJSONTable {
 
         primaryFuture.exceptionally(throwable -> {
             LOG.error("Problem while execution with primary table ", throwable);
-            throw new RetryPolicyException(throwable);
+            return null;
         });
 
         try {
@@ -132,6 +133,9 @@ public class EnhancedJSONTable {
                 throw new RuntimeException(throwable);
             });
             secondaryFuture.acceptEitherAsync(primaryFuture, s -> {
+                if (secondaryFuture.isDone()) {
+                    primaryFuture.cancel(true);
+                }
             });
         }
     }
