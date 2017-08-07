@@ -2,6 +2,8 @@ package com.mapr.db;
 
 import org.ojai.store.DocumentStore;
 import org.ojai.store.DriverManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -9,6 +11,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Util {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Util.class);
+
 
     private static final String DB_DRIVER_NAME = "ojai:mapr:";
 
@@ -49,9 +54,13 @@ public class Util {
      * @param switched Field which need to switch after period of time
      */
     public static void createAndExecuteTaskForSwitchingTableBack(AtomicBoolean switched) {
-        ScheduledExecutorService scheduler =
-                Executors.newScheduledThreadPool(1);
-        scheduler.schedule(() -> switched.set(false), 1000, TimeUnit.MILLISECONDS);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+        scheduler.schedule(() ->
+                {   LOG.warn("Switching operations back to primary table");
+                    switched.set(false);
+                } ,
+                10,
+                TimeUnit.SECONDS);
     }
 
 //    private static Table getTableFromCluster(Connection conn, String tableName) throws IOException {
