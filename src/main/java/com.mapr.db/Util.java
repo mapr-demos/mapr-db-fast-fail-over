@@ -3,11 +3,6 @@ package com.mapr.db;
 import org.ojai.store.DocumentStore;
 import org.ojai.store.DriverManager;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 public class Util {
 
     private static final String DB_DRIVER_NAME = "ojai:mapr:";
@@ -43,15 +38,6 @@ public class Util {
         org.ojai.store.Connection connection =
                 DriverManager.getConnection(DB_DRIVER_NAME);
         return connection.getStore(tableName);
-    }
-
-    /**
-     * @param switched Field which need to switch after period of time
-     */
-    public static void createAndExecuteTaskForSwitchingTableBack(AtomicBoolean switched) {
-        ScheduledExecutorService scheduler =
-                Executors.newScheduledThreadPool(1);
-        scheduler.schedule(() -> switched.set(false), 1000, TimeUnit.MILLISECONDS);
     }
 
 //    private static Table getTableFromCluster(Connection conn, String tableName) throws IOException {
