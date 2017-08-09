@@ -20,14 +20,12 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-import static com.mapr.db.Util.getJsonTable;
+import static com.mapr.db.Utils.getJsonTable;
 
-//import static com.mapr.db.Util.createAndExecuteTaskForSwitchingTableBack;
 
 public class EnhancedJSONTable implements Closeable {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(EnhancedJSONTable.class);
+    private static final Logger LOG = LoggerFactory.getLogger(EnhancedJSONTable.class);
 
     private static long MINUTE = 60000;
 
@@ -39,25 +37,20 @@ public class EnhancedJSONTable implements Closeable {
     /**
      * Variable for determining time that needed for switching table
      */
-    private AtomicInteger counterForTableSwitching =
-            new AtomicInteger(0);
+    private AtomicInteger counterForTableSwitching = new AtomicInteger(0);
 
-    private ExecutorService tableOperationExecutor =
-            Executors.newFixedThreadPool(2);
+    private ExecutorService tableOperationExecutor = Executors.newFixedThreadPool(2);
 
     /**
      * Scheduler for switching table
      */
-    private ScheduledExecutorService scheduler =
-            Executors.newScheduledThreadPool(1);
+    private ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     /**
      * Scheduler for switching table to default order
      */
-    private ScheduledExecutorService returnCounterToDefault =
-            Executors.newScheduledThreadPool(1);
+    private ScheduledExecutorService returnCounterToDefault = Executors.newScheduledThreadPool(1);
 
-    public EnhancedJSONTable(String primaryTable, String secondaryTable,
-                             long timeOut) {
+    public EnhancedJSONTable(String primaryTable, String secondaryTable, long timeOut) {
         this.primary =
                 getJsonTable(primaryTable);
         this.secondary =
@@ -120,12 +113,10 @@ public class EnhancedJSONTable implements Closeable {
         });
     }
 
-    private void performRetryLogic(Runnable primaryTask,
-                                   Runnable secondaryTask)
+    private void performRetryLogic(Runnable primaryTask, Runnable secondaryTask)
             throws ExecutionException, InterruptedException {
 
-        CompletableFuture<Void> primaryFuture =
-                CompletableFuture.runAsync(primaryTask, tableOperationExecutor);
+        CompletableFuture<Void> primaryFuture = CompletableFuture.runAsync(primaryTask, tableOperationExecutor);
 
         primaryFuture.exceptionally(throwable -> {
             LOG.error("Problem while execution with primary table ", throwable);
@@ -138,13 +129,11 @@ public class EnhancedJSONTable implements Closeable {
 
 
             LOG.info("Try to perform operation with secondary table");
-            CompletableFuture<Void> secondaryFuture =
-                    CompletableFuture.runAsync(secondaryTask, tableOperationExecutor);
+            CompletableFuture<Void> secondaryFuture = CompletableFuture.runAsync(secondaryTask, tableOperationExecutor);
 
             secondaryFuture.exceptionally(throwable -> {
                 LOG.error("Problem while execution", throwable);
                 return null;
-//                throw new RuntimeException(throwable);
             });
 
             secondaryFuture.acceptEitherAsync(primaryFuture, s -> {
@@ -158,12 +147,10 @@ public class EnhancedJSONTable implements Closeable {
         }
     }
 
-    private <R> R performRetryLogicWithOutputData(Supplier<R> primaryTask,
-                                                  Supplier<R> secondaryTask)
+    private <R> R performRetryLogicWithOutputData(Supplier<R> primaryTask, Supplier<R> secondaryTask)
             throws ExecutionException, InterruptedException {
 
-        CompletableFuture<R> primaryFuture =
-                CompletableFuture.supplyAsync(primaryTask, tableOperationExecutor);
+        CompletableFuture<R> primaryFuture = CompletableFuture.supplyAsync(primaryTask, tableOperationExecutor);
 
         primaryFuture.exceptionally(throwable -> {
             LOG.error("Problem while execution with primary table ", throwable);
@@ -177,8 +164,7 @@ public class EnhancedJSONTable implements Closeable {
             LOG.error("Processing request to primary table too long");
             LOG.info("Try to perform operation with secondary table");
 
-            CompletableFuture<R> secondaryFuture =
-                    CompletableFuture.supplyAsync(secondaryTask, tableOperationExecutor);
+            CompletableFuture<R> secondaryFuture = CompletableFuture.supplyAsync(secondaryTask, tableOperationExecutor);
 
             secondaryFuture.exceptionally(throwable -> {
                 LOG.error("Problem while execution", throwable);
