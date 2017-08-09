@@ -50,6 +50,25 @@ public class EnhancedJSONTable implements Closeable {
      */
     private ScheduledExecutorService returnCounterToDefault = Executors.newScheduledThreadPool(1);
 
+    /**
+     * Create a new JSON store that with a primary table and secondary table. The application will automatically switch
+     * to the secondary table if the operation on primary is not successful in less than 500ms.
+     *
+     * @param primaryTable   the primary table used by the applicatin
+     * @param secondaryTable the table used in case of fail over
+     */
+    public EnhancedJSONTable(String primaryTable, String secondaryTable) {
+        this(primaryTable, secondaryTable, 500);
+    }
+
+    /**
+     * Create a new JSON store that with a primary table and secondary table. The application will automatically switch
+     * to the secondary table if the operation on primary is successful in the <code>timeout</code>
+     *
+     * @param primaryTable   the primary table used by the applicatin
+     * @param secondaryTable the table used in case of fail over
+     * @param timeOut        the time out on primary table before switching to secondary.
+     */
     public EnhancedJSONTable(String primaryTable, String secondaryTable, long timeOut) {
         DocumentStore primary = getJsonTable(primaryTable);
         DocumentStore secondary = getJsonTable(secondaryTable);
@@ -67,6 +86,11 @@ public class EnhancedJSONTable implements Closeable {
                 }, 2 * MINUTE, 2 * MINUTE, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * See OJAI insert
+     *
+     * @param document
+     */
     public void insert(Document document) {
         try {
             tryInsert(document);
@@ -76,6 +100,11 @@ public class EnhancedJSONTable implements Closeable {
         }
     }
 
+    /**
+     * See OJAI find
+     *
+     * @return
+     */
     public DocumentStream find() {
         try {
             return tryFind();
@@ -85,6 +114,12 @@ public class EnhancedJSONTable implements Closeable {
         }
     }
 
+    /**
+     * See OJAI find
+     *
+     * @param query
+     * @return
+     */
     public DocumentStream find(QueryCondition query) {
         try {
             return tryFind(query);
@@ -94,16 +129,54 @@ public class EnhancedJSONTable implements Closeable {
         }
     }
 
+
+    /**
+     * This private method:
+     * - call find on primary table and secondary table if issue
+     * using the <code>performRetryLogicWithOutputData</code> method.
+     * <p>
+     * In case of fail over this method stays on the failover table.
+     *
+     * @return the documentstream coming from primary or secondary table
+     * @throws IOException
+     * @throws InterruptedException
+     * @throws ExecutionException
+     */
     private DocumentStream tryFind() throws IOException, InterruptedException, ExecutionException {
         return performRetryLogicWithOutputData(() -> documnetStoreHolder.get()[0].find(),
                 () -> documnetStoreHolder.get()[1].find());
     }
 
+    /**
+     * This private method:
+     * - call find on primary table and secondary table if issue
+     * using the <code>performRetryLogicWithOutputData</code> method.
+     * <p>
+     * In case of fail over this method stays on the failover table.
+     *
+     * @param query
+     * @return
+     * @throws IOException
+     * @throws InterruptedException
+     * @throws ExecutionException
+     */
     private DocumentStream tryFind(QueryCondition query) throws IOException, InterruptedException, ExecutionException {
         return performRetryLogicWithOutputData(() -> documnetStoreHolder.get()[0].find(query),
                 () -> documnetStoreHolder.get()[1].find(query));
     }
 
+    /**
+     * This private method:
+     * - call insert on primary table and secondary table if issue
+     * using the <code>performRetryLogicWithOutputData</code> method.
+     * <p>
+     * In case of fail over this method stays on the failover table.
+     *
+     * @param document the document to insert in the DB
+     * @throws IOException
+     * @throws InterruptedException
+     * @throws ExecutionException
+     */
     private void tryInsert(Document document) throws IOException, InterruptedException, ExecutionException {
         performRetryLogic(() -> {
             documnetStoreHolder.get()[0].insert(document);
@@ -137,8 +210,11 @@ public class EnhancedJSONTable implements Closeable {
                 return null;
             });
 
-            secondaryFuture.acceptEitherAsync(primaryFuture, s -> {});
+            secondaryFuture.acceptEitherAsync(primaryFuture, s -> {
+            });
 
+            // Prepare the system to swtich back to primary
+            // this method contain the logic to define when to switch back
             int numberOfSwitch = counterForTableSwitching.getAndIncrement();
             createAndExecuteTaskForSwitchingTable(getTimeOut(numberOfSwitch));
         }
@@ -168,6 +244,8 @@ public class EnhancedJSONTable implements Closeable {
                 throw new RetryPolicyException(throwable);
             });
 
+            // Prepare the system to swtich back to primary
+            // this method contain the logic to define when to switch back
             int numberOfSwitch = counterForTableSwitching.getAndIncrement();
             createAndExecuteTaskForSwitchingTable(getTimeOut(numberOfSwitch));
 
