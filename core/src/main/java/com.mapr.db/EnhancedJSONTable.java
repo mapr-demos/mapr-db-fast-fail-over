@@ -32,7 +32,7 @@ public class EnhancedJSONTable implements Closeable {
 
     private long timeOut;
 
-    private AtomicReference<DocumentStore[]> documnetStoreHolder;
+    private AtomicReference<DocumentStore[]> documentStoreHolder;
 
     /**
      * Variable for determining time that needed for switching table
@@ -74,7 +74,7 @@ public class EnhancedJSONTable implements Closeable {
         DocumentStore secondary = getJsonTable(secondaryTable);
         this.timeOut = timeOut;
 
-        this.documnetStoreHolder = new AtomicReference<>(new DocumentStore[]{primary, secondary});
+        this.documentStoreHolder = new AtomicReference<>(new DocumentStore[]{primary, secondary});
 
         // Create task for reset time for switching table to default value,
         // that is executions will commence after 2 min then 2 min + 2 min}, then
@@ -143,8 +143,8 @@ public class EnhancedJSONTable implements Closeable {
      * @throws ExecutionException
      */
     private DocumentStream tryFind() throws IOException, InterruptedException, ExecutionException {
-        return performRetryLogicWithOutputData(() -> documnetStoreHolder.get()[0].find(),
-                () -> documnetStoreHolder.get()[1].find());
+        return performRetryLogicWithOutputData(() -> documentStoreHolder.get()[0].find(),
+                () -> documentStoreHolder.get()[1].find());
     }
 
     /**
@@ -161,8 +161,8 @@ public class EnhancedJSONTable implements Closeable {
      * @throws ExecutionException
      */
     private DocumentStream tryFind(QueryCondition query) throws IOException, InterruptedException, ExecutionException {
-        return performRetryLogicWithOutputData(() -> documnetStoreHolder.get()[0].find(query),
-                () -> documnetStoreHolder.get()[1].find(query));
+        return performRetryLogicWithOutputData(() -> documentStoreHolder.get()[0].find(query),
+                () -> documentStoreHolder.get()[1].find(query));
     }
 
     /**
@@ -179,10 +179,10 @@ public class EnhancedJSONTable implements Closeable {
      */
     private void tryInsert(Document document) throws IOException, InterruptedException, ExecutionException {
         performRetryLogic(() -> {
-            documnetStoreHolder.get()[0].insert(document);
+            documentStoreHolder.get()[0].insert(document);
             LOG.info("Operation performed with primary table");
         }, () -> {
-            documnetStoreHolder.get()[1].insert(document);
+            documentStoreHolder.get()[1].insert(document);
             LOG.info("Operation performed with secondary table");
         });
     }
@@ -294,9 +294,9 @@ public class EnhancedJSONTable implements Closeable {
      */
     private void swapTableLinks() {
         while (true) {
-            DocumentStore[] origin = documnetStoreHolder.get();
+            DocumentStore[] origin = documentStoreHolder.get();
             DocumentStore[] swapped = new DocumentStore[]{origin[1], origin[0]};
-            if (documnetStoreHolder.compareAndSet(origin, swapped)) {
+            if (documentStoreHolder.compareAndSet(origin, swapped)) {
                 return;
             }
         }
@@ -313,7 +313,7 @@ public class EnhancedJSONTable implements Closeable {
         returnCounterToDefault.shutdownNow();
         scheduler.shutdownNow();
         tableOperationExecutor.shutdownNow();
-        documnetStoreHolder.get()[0].close();
-        documnetStoreHolder.get()[1].close();
+        documentStoreHolder.get()[0].close();
+        documentStoreHolder.get()[1].close();
     }
 }
