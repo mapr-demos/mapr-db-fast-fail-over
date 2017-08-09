@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
+import java.io.IOException;
 import java.util.UUID;
 
 
@@ -27,7 +28,7 @@ public class InsertDocuments {
   private static final Connection connection = DriverManager.getConnection("ojai:mapr:");
 
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws IOException {
 
 
     Logger log = LoggerFactory.getLogger(InsertDocuments.class);
@@ -54,6 +55,7 @@ public class InsertDocuments {
 
     }
 
+    jsonTable.close();
 
 
 
