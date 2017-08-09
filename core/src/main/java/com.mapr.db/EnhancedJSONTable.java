@@ -18,6 +18,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import static com.mapr.db.Utils.getJsonTable;
@@ -29,10 +30,9 @@ public class EnhancedJSONTable implements Closeable {
 
     private static long MINUTE = 60000;
 
-    private DocumentStore primary;
-    private DocumentStore secondary;
-
     private long timeOut;
+
+    private AtomicReference<DocumentStore[]> documnetStoreHolder;
 
     /**
      * Variable for determining time that needed for switching table
@@ -51,21 +51,20 @@ public class EnhancedJSONTable implements Closeable {
     private ScheduledExecutorService returnCounterToDefault = Executors.newScheduledThreadPool(1);
 
     public EnhancedJSONTable(String primaryTable, String secondaryTable, long timeOut) {
-        this.primary =
-                getJsonTable(primaryTable);
-        this.secondary =
-                getJsonTable(secondaryTable);
+        DocumentStore primary = getJsonTable(primaryTable);
+        DocumentStore secondary = getJsonTable(secondaryTable);
         this.timeOut = timeOut;
+
+        this.documnetStoreHolder = new AtomicReference<>(new DocumentStore[]{primary, secondary});
 
         // Create task for reset time for switching table to default value,
         // that is executions will commence after 2 min then 2 min + 2 min}, then
-        // 2 min + 2 min * 4}, and so on.
-
+        // 2 min + 2 min * 2}, and so on.
         returnCounterToDefault.scheduleAtFixedRate(
                 () -> {
                     returnCounterToDefaultValue();
                     LOG.info("Counter return to default value!");
-                }, 4 * MINUTE, 4 * MINUTE, TimeUnit.MILLISECONDS);
+                }, 2 * MINUTE, 2 * MINUTE, TimeUnit.MILLISECONDS);
     }
 
     public void insert(Document document) {
@@ -96,19 +95,21 @@ public class EnhancedJSONTable implements Closeable {
     }
 
     private DocumentStream tryFind() throws IOException, InterruptedException, ExecutionException {
-        return performRetryLogicWithOutputData(() -> primary.find(), () -> secondary.find());
+        return performRetryLogicWithOutputData(() -> documnetStoreHolder.get()[0].find(),
+                () -> documnetStoreHolder.get()[1].find());
     }
 
     private DocumentStream tryFind(QueryCondition query) throws IOException, InterruptedException, ExecutionException {
-        return performRetryLogicWithOutputData(() -> primary.find(query), () -> secondary.find(query));
+        return performRetryLogicWithOutputData(() -> documnetStoreHolder.get()[0].find(query),
+                () -> documnetStoreHolder.get()[1].find(query));
     }
 
     private void tryInsert(Document document) throws IOException, InterruptedException, ExecutionException {
         performRetryLogic(() -> {
-            primary.insert(document);
+            documnetStoreHolder.get()[0].insert(document);
             LOG.info("Operation performed with primary table");
         }, () -> {
-            secondary.insert(document);
+            documnetStoreHolder.get()[1].insert(document);
             LOG.info("Operation performed with secondary table");
         });
     }
@@ -136,11 +137,7 @@ public class EnhancedJSONTable implements Closeable {
                 return null;
             });
 
-            secondaryFuture.acceptEitherAsync(primaryFuture, s -> {
-                if (secondaryFuture.isDone()) {
-                    primaryFuture.cancel(true);
-                }
-            });
+            secondaryFuture.acceptEitherAsync(primaryFuture, s -> {});
 
             int numberOfSwitch = counterForTableSwitching.getAndIncrement();
             createAndExecuteTaskForSwitchingTable(getTimeOut(numberOfSwitch));
@@ -218,9 +215,13 @@ public class EnhancedJSONTable implements Closeable {
      * Swap primary and secondary tables
      */
     private void swapTableLinks() {
-        DocumentStore tmp = primary;
-        primary = secondary;
-        secondary = tmp;
+        while (true) {
+            DocumentStore[] origin = documnetStoreHolder.get();
+            DocumentStore[] swapped = new DocumentStore[]{origin[1], origin[0]};
+            if (documnetStoreHolder.compareAndSet(origin, swapped)) {
+                return;
+            }
+        }
     }
 
     /**
@@ -234,7 +235,7 @@ public class EnhancedJSONTable implements Closeable {
         returnCounterToDefault.shutdownNow();
         scheduler.shutdownNow();
         tableOperationExecutor.shutdownNow();
-        primary.close();
-        secondary.close();
+        documnetStoreHolder.get()[0].close();
+        documnetStoreHolder.get()[1].close();
     }
 }
