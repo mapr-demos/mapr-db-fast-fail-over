@@ -1,5 +1,6 @@
 package com.mapr.db;
 
+import org.ojai.store.Connection;
 import org.ojai.store.DocumentStore;
 import org.ojai.store.DriverManager;
 
@@ -17,7 +18,7 @@ public class Utils {
      * @return com.mapr.db.Table
      */
     public static DocumentStore getJsonTable(String tableName) {
-        org.ojai.store.Connection connection =
+        Connection connection =
                 DriverManager.getConnection(DB_DRIVER_NAME);
         return connection.getStore(tableName);
     }

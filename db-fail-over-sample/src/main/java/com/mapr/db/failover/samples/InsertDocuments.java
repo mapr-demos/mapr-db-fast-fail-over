@@ -34,7 +34,7 @@ public class InsertDocuments {
     Logger log = LoggerFactory.getLogger(InsertDocuments.class);
 
     // Create an "Enhanced" data store that support fail over to other cluster
-    EnhancedJSONTable jsonTable = new EnhancedJSONTable(PRIMARY_TABLE, SECONDARY_TABLE, 500);
+    EnhancedJSONTable jsonTable = new EnhancedJSONTable(PRIMARY_TABLE, SECONDARY_TABLE, 700);
 
 
     // Infinite loop to test insert
