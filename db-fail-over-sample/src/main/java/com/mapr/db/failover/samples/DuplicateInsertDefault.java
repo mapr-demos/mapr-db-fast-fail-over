@@ -5,6 +5,7 @@ import org.ojai.Document;
 import org.ojai.store.Connection;
 import org.ojai.store.DocumentStore;
 import org.ojai.store.DriverManager;
+import org.ojai.store.exceptions.DocumentExistsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,18 +21,35 @@ public class DuplicateInsertDefault {
 
   public static void main(String[] args) throws IOException, InterruptedException {
 
+    System.out.println(" ==== Start Application ===");
+
     Logger log = LoggerFactory.getLogger(DuplicateInsertDefault.class);
 
     DocumentStore jsonTable = connection.getStore(PRIMARY_TABLE);
 
     Document doc = connection.newDocument("{\"_id\" : \"sample-01\", \"name\" : \"sample-01\"}");
 
+    log.info("Deleting sample ");
+    jsonTable.delete("sample-01");
+    jsonTable.flush();
+
     //insert 1
+    log.info("Inserting document a first time ");
     jsonTable.insert(doc);
 
 
-    // insert 2
-    jsonTable.insert(doc);
+    try {
+      // insert 2
+      log.info("Inserting document a second time, should fail ");
+      jsonTable.insert(doc);
+    } catch (DocumentExistsException e) {
+      log.error("Cannot insert : document exists - {}", e.getMessage());
+    }
+
+
+    jsonTable.close();
+
+    System.out.println(" ==== Stop Application ===");
 
 
 
