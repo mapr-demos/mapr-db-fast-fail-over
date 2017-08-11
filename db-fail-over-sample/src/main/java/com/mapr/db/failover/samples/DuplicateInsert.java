@@ -1,18 +1,14 @@
 package com.mapr.db.failover.samples;
 
 import com.mapr.db.EnhancedJSONTable;
-import com.sun.javadoc.Doc;
 import org.ojai.Document;
-import org.ojai.DocumentStream;
 import org.ojai.store.Connection;
 import org.ojai.store.DriverManager;
-import org.ojai.store.Query;
 import org.ojai.store.exceptions.DocumentExistsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Collection;
 
 public class DuplicateInsert {
 

@@ -19,7 +19,6 @@ import com.mapr.db.EnhancedJSONTable;
 import org.ojai.Document;
 import org.ojai.DocumentStream;
 import org.ojai.store.Connection;
-import org.ojai.store.DocumentStore;
 import org.ojai.store.DriverManager;
 import org.ojai.store.Query;
 import org.ojai.store.QueryCondition.Op;

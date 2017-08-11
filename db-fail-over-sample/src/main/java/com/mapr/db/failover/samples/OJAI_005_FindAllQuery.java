@@ -51,6 +51,8 @@ public class OJAI_005_FindAllQuery {
       System.out.println(userDocument.asJsonString());      
     }
 
+    stream.close();
+
     // Close this instance of OJAI DocumentStore
     store.close();
 

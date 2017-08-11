@@ -805,7 +805,7 @@ public class EnhancedJSONTable implements Closeable {
     /**
      * This private methods:
      * - call insertOrReplace on primary table and secondary table if issue
-     * using the <code>performRetryLogicWithOutputData</code> method.
+     * using the <code>performRetryLogic</code> method.
      * <p>
      * In case of fail over this method stays on the failover table.
      */
@@ -852,7 +852,7 @@ public class EnhancedJSONTable implements Closeable {
     /**
      * This private methods:
      * - call update on primary table and secondary table if issue
-     * using the <code>performRetryLogicWithOutputData</code> method.
+     * using the <code>performRetryLogic</code> method.
      * <p>
      * In case of fail over this method stays on the failover table.
      */
@@ -869,7 +869,7 @@ public class EnhancedJSONTable implements Closeable {
     /**
      * This private methods:
      * - call delete on primary table and secondary table if issue
-     * using the <code>performRetryLogicWithOutputData</code> method.
+     * using the <code>performRetryLogic</code> method.
      * <p>
      * In case of fail over this method stays on the failover table.
      */
@@ -916,7 +916,7 @@ public class EnhancedJSONTable implements Closeable {
     /**
      * This private methods:
      * - call insert on primary table and secondary table if issue
-     * using the <code>performRetryLogicWithOutputData</code> method.
+     * using the <code>performRetryLogic</code> method.
      * <p>
      * In case of fail over this method stays on the failover table.
      */
@@ -963,7 +963,7 @@ public class EnhancedJSONTable implements Closeable {
     /**
      * This private methods:
      * - call replace on primary table and secondary table if issue
-     * using the <code>performRetryLogicWithOutputData</code> method.
+     * using the <code>performRetryLogic</code> method.
      * <p>
      * In case of fail over this method stays on the failover table.
      */
@@ -1007,6 +1007,13 @@ public class EnhancedJSONTable implements Closeable {
                 () -> documentStoreHolder.get()[1].replace(stream, fieldAsKey));
     }
 
+    /**
+     * This private methods:
+     * - call flush on primary table and secondary table if issue
+     * using the <code>performRetryLogic</code> method.
+     * <p>
+     * In case of fail over this method stays on the failover table.
+     */
     private void tryFlush() throws IOException, InterruptedException, ExecutionException {
         performRetryLogic(() -> documentStoreHolder.get()[0].flush(),
                 () -> documentStoreHolder.get()[1].flush());
@@ -1117,8 +1124,10 @@ public class EnhancedJSONTable implements Closeable {
             // this method contain the logic to define when to switch back
             createAndExecuteTaskForSwitchingTable(getTimeOut(numberOfSwitch));
 
+            secondaryFuture.acceptEither(primaryFuture, r -> { });
+
             // We combine primary and secondary CompletableFuture and return result from the first that will succeed
-            return secondaryFuture.join();
+            return secondaryFuture.get();
         }
     }
 
