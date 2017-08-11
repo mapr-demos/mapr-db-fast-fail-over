@@ -1,6 +1,7 @@
 package com.mapr.db.failover.samples;
 
 import com.mapr.db.EnhancedJSONTable;
+import com.sun.javadoc.Doc;
 import org.ojai.Document;
 import org.ojai.DocumentStream;
 import org.ojai.store.Connection;
@@ -10,9 +11,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collection;
 
-@SuppressWarnings("Duplicates")
-public class FindDocuments {
+public class DuplicateInsert {
 
   private static final String PRIMARY_TABLE = "/mapr/cluster1/apps/user_profile";
   private static final String SECONDARY_TABLE = "/mapr/cluster2/apps/user_profile";
@@ -22,33 +23,19 @@ public class FindDocuments {
 
   public static void main(String[] args) throws IOException, InterruptedException {
 
-    Logger log = LoggerFactory.getLogger(FindDocuments.class);
+    Logger log = LoggerFactory.getLogger(DuplicateInsert.class);
 
     // Create an "Enhanced" data store that support fail over to other cluster
     EnhancedJSONTable jsonTable = new EnhancedJSONTable(PRIMARY_TABLE, SECONDARY_TABLE);
 
+    Document doc = connection.newDocument("{\"_id\" : \"sample-01\", \"name\" : \"sample-01\"}");
 
-    // Build an OJAI query with an order by, offset, and limit
-    final Query query = connection.newQuery()
-            .orderBy("_id")
-            .offset(5)
-            .limit(5)
-            .build();
+    //insert 1
+    jsonTable.insert(doc);
 
 
-    //infinite loop
-    boolean loop = true;
-    int counter = 0;
-
-    while(loop) {
-      final DocumentStream stream = jsonTable.findQuery(query);
-      for (final Document doc : stream) {
-        // Print the OJAI Document
-        System.out.println(doc.asJsonString());
-      }
-      System.out.println(" == "+ counter++  +" == ");
-      Thread.sleep(1000);
-    }
+    // insert 2
+    jsonTable.insert(doc);
 
 
 

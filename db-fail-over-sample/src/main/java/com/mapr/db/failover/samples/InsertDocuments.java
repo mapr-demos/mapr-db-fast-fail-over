@@ -18,6 +18,7 @@ import java.util.UUID;
  * Simple application that inserts a random document every second
  *
  */
+@SuppressWarnings("Duplicates")
 public class InsertDocuments {
 
 

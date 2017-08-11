@@ -11,6 +11,7 @@ import org.ojai.store.QueryCondition;
 /**
  *  Delete all document in tables
  */
+@SuppressWarnings("Duplicates")
 public class PurgeTables {
 
   private static final String PRIMARY_TABLE = "/mapr/cluster1/apps/user_profile";
