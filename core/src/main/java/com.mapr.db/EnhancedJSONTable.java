@@ -1012,7 +1012,7 @@ public class EnhancedJSONTable implements Closeable {
       CompletableFuture<Void> primaryFuture = CompletableFuture.runAsync(primaryTask, tableOperationExecutor);
 
         primaryFuture.exceptionally(throwable -> {
-            LOG.error("Problem while execution with primary table ", throwable);
+            LOG.error("Problem while execution with primary table {} ",  this.getCurrentActiveTable());
             return null;
         });
 
@@ -1056,7 +1056,7 @@ public class EnhancedJSONTable implements Closeable {
 
         CompletableFuture<R> primaryFuture = CompletableFuture.supplyAsync(primaryTask, tableOperationExecutor);
         primaryFuture.exceptionally(throwable -> {
-            LOG.error("Problem while execution with primary table ", throwable);
+            LOG.error("Problem while execution with primary table {} ",  this.getCurrentActiveTable());
             throw new RetryPolicyException(throwable);
         });
 
