@@ -34,15 +34,16 @@ public class InsertDocuments {
     Logger log = LoggerFactory.getLogger(InsertDocuments.class);
 
     // Create an "Enhanced" data store that support fail over to other cluster
-    EnhancedJSONTable jsonTable = new EnhancedJSONTable(PRIMARY_TABLE, SECONDARY_TABLE, 700);
+    EnhancedJSONTable jsonTable = new EnhancedJSONTable(PRIMARY_TABLE, SECONDARY_TABLE);
 
 
     // Infinite loop to test insert
     boolean loop = true;
+    int counter=0;
     while (loop) {
-
-      Document doc = generateDocument();
-      log.info("Inserting document "+ doc.getId());
+      counter++;
+      Document doc = generateDocument(counter);
+      log.info("Inserting {} document {}. ", counter , doc.getId());
       jsonTable.insert(doc);
 
       // sleep for 1sec
@@ -64,14 +65,18 @@ public class InsertDocuments {
 
   /**
    * Create a "random" document
+   * @param id integer part of the key and name
    * @return a new document with a ID generated from a UUID
    */
-  private static Document generateDocument() {
+  private static Document generateDocument(int id) {
       String newDocUUID = UUID.randomUUID().toString();
+
+      String value = String.format("sample-%05d-%s", id, newDocUUID);
+
       return connection
               .newDocument()
-              .setId("sample-" + newDocUUID)
-              .set("name", "sample-" + newDocUUID);
+              .setId(value)
+              .set("name", value);
   }
 
 
