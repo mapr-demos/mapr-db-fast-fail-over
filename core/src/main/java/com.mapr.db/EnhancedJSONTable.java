@@ -1007,12 +1007,18 @@ public class EnhancedJSONTable implements Closeable {
     private void performRetryLogic(Runnable primaryTask, Runnable secondaryTask)
             throws ExecutionException, InterruptedException {
 
-      LOG.debug("Execute operation with Primary : {} , Secondary {}", this.getCurrentActiveTable(), this.getCurrentFailOverTable());
+        LOG.debug("Execute operation with Primary : {} , Secondary {}", this.getCurrentActiveTable(), this.getCurrentFailOverTable());
 
-      CompletableFuture<Void> primaryFuture = CompletableFuture.runAsync(primaryTask, tableOperationExecutor);
+        // We create local executor because we need to have a possibility to shut down it.
+        // When we make requests to the cluster, which unreachable,
+        // this request will lock the thread in which it executed for some time,
+        // and we don't want to wait for availability
+        ExecutorService tableOperationExecutor = Executors.newFixedThreadPool(2);
+
+        CompletableFuture<Void> primaryFuture = CompletableFuture.runAsync(primaryTask, tableOperationExecutor);
 
         primaryFuture.exceptionally(throwable -> {
-            LOG.error("Problem while execution with primary table {} ",  this.getCurrentActiveTable());
+            LOG.error("Problem while execution with primary table {} ", this.getCurrentActiveTable());
             return null;
         });
 
@@ -1022,21 +1028,29 @@ public class EnhancedJSONTable implements Closeable {
 
             LOG.warn("Processing request to primary {} table too long, trying on secondary {} ",  this.getCurrentActiveTable(), this.getCurrentFailOverTable());
 
+            // If timeOut tie exceeds, we make requests to the second cluster,
+            // that will execute in parallel with request to primary cluster
             CompletableFuture<Void> secondaryFuture = CompletableFuture.runAsync(secondaryTask, tableOperationExecutor);
+
             secondaryFuture.exceptionally(throwable -> {
                 LOG.error("Problem while execution", throwable);
                 return null;
             });
 
+            // We combine primary and secondary CompletableFuture and execute this lambda,
+            // if one of the futures is completed
             secondaryFuture.acceptEitherAsync(primaryFuture, s -> {
+                // Check if the primary request is stuck, if so,
+                // we shut down the executor without completion of a primary request
                 if (!primaryFuture.isDone()) {
-                    primaryFuture.cancel(true);
+                    tableOperationExecutor.shutdownNow();
                 }
             });
 
-            // Prepare the system to swtich back to primary
-            // this method contain the logic to define when to switch back
+            // This is for determining time for switching
             int numberOfSwitch = counterForTableSwitching.getAndIncrement();
+            // Switch to the secondary cluster adn prepare the system to switch back to primary
+            // this method contain the logic to define when to switch back
             createAndExecuteTaskForSwitchingTable(getTimeOut(numberOfSwitch));
         }
     }
@@ -1054,7 +1068,12 @@ public class EnhancedJSONTable implements Closeable {
 
         LOG.debug("Execute operation with Primary : {} , Secondary {}", this.getCurrentActiveTable(), this.getCurrentFailOverTable());
 
+        // We create local executor because we need to have a possibility to shut down it.
+        // When we make requests to the cluster, which unreachable,
+        // this request will lock the thread in which it executed for some time,
+        // and we don't want to wait for availability
         CompletableFuture<R> primaryFuture = CompletableFuture.supplyAsync(primaryTask, tableOperationExecutor);
+
         primaryFuture.exceptionally(throwable -> {
             LOG.error("Problem while execution with primary table {} ",  this.getCurrentActiveTable());
             throw new RetryPolicyException(throwable);
@@ -1066,6 +1085,8 @@ public class EnhancedJSONTable implements Closeable {
 
             LOG.warn("Processing request to primary {} table too long, trying on secondary {} ",  this.getCurrentActiveTable(), this.getCurrentFailOverTable());
 
+            // If timeOut tie exceeds, we make requests to the second cluster,
+            // that will execute in parallel with request to primary cluster
             CompletableFuture<R> secondaryFuture = CompletableFuture.supplyAsync(secondaryTask, tableOperationExecutor);
 
             secondaryFuture.exceptionally(throwable -> {
@@ -1073,11 +1094,13 @@ public class EnhancedJSONTable implements Closeable {
                 throw new RetryPolicyException(throwable);
             });
 
-            // Prepare the system to switch back to primary
-            // this method contain the logic to define when to switch back
+            // This is for determining time for switching
             int numberOfSwitch = counterForTableSwitching.getAndIncrement();
+            // Switch to the secondary cluster adn prepare the system to switch back to primary
+            // this method contain the logic to define when to switch back
             createAndExecuteTaskForSwitchingTable(getTimeOut(numberOfSwitch));
 
+            // We combine primary and secondary CompletableFuture and return result from the first that will succeed
             return secondaryFuture.join();
         }
     }
@@ -1088,23 +1111,23 @@ public class EnhancedJSONTable implements Closeable {
      * @param timeForSwitchingTableBack Time to return to the initial state
      */
     private void createAndExecuteTaskForSwitchingTable(long timeForSwitchingTableBack) {
-        if (!switched.get()) {
-            LOG.debug("Switch table for - {} ms", timeForSwitchingTableBack);
-            swapTableLinks(primaryTable, secondaryTable);
+        if (isClusterSwitched()) {
+            LOG.info("Switch table for - {} ms", timeForSwitchingTableBack);
+            swapTableLinks();
             switched.set(true);
+            // We create a task for scheduler, that will change a cluster back after 10s/30s/1m
             scheduler.schedule(
                     () -> {
-                        swapTableLinks(secondaryTable, primaryTable);
+                        swapTableLinks();
                         switched.set(false); // indicates that we are not in "failovermode"
-                        LOG.warn("Switching back to itinial conf ( Primary : {} , Secondary {}   ) ", primaryTable, secondaryTable);
+                        LOG.warn("Switching back to initial conf ( Primary : {} , Secondary {}   ) ", primaryTable, secondaryTable);
                     }, timeForSwitchingTableBack, TimeUnit.MILLISECONDS);
         }
     }
 
-
     /**
      * Determines the amount of time that we need to stay on another table
-     *
+     * <p>
      * TODO : issue #18 initial fail over should be 10s for some reason it "coming back" after restarting a cluster fails
      *
      * @param numberOfSwitch Quantity of table switching
@@ -1114,29 +1137,23 @@ public class EnhancedJSONTable implements Closeable {
         long minute = 60000;
         switch (numberOfSwitch) {
             case 0:
-                return minute;
+                return minute / 6;
             case 1:
-                return minute * 2;
+                return minute / 2;
             default:
-                return 2 * minute;
+                return minute;
         }
     }
 
-  /**
-   * Swap primary and secondary tables
-   *
-   * When failing over to another table/cluster or when going back to origin/master cluster
-   * we do not change the whole logic, but simply switch the primary/secondary tables
-   *
-   *
-   * @param primaryStore : path of the "master/primary" table.
-   * @param secondaryStore : path of the "failover/secondary" table.
-   */
-    private void swapTableLinks(String primaryStore, String secondaryStore) {
+    /**
+     * Swap primary and secondary tables
+     * <p>
+     * When failing over to another table/cluster or when going back to origin/master cluster
+     * we do not change the whole logic, but simply switch the primary/secondary tables
+     */
+    private void swapTableLinks() {
         while (true) {
             DocumentStore[] origin = documentStoreHolder.get();
-            origin[0] = getJsonTable(primaryStore); // TODO : issue #17 why do we reconnect all the time it looks it is related
-            origin[1] = getJsonTable(secondaryStore); //TODO : to the fail over, but we need to investiage the original issue
             DocumentStore[] swapped = new DocumentStore[]{origin[1], origin[0]};
             if (documentStoreHolder.compareAndSet(origin, swapped)) {
                 return;
@@ -1147,28 +1164,33 @@ public class EnhancedJSONTable implements Closeable {
 
     /**
      * Get the path of the current active table
+     *
      * @return the path of the current active table
      */
     private String getCurrentActiveTable() {
-      if (!switched.get()) {
-        return primaryTable;
-      } else {
-        return secondaryTable;
-      }
+        if (isClusterSwitched()) {
+            return primaryTable;
+        } else {
+            return secondaryTable;
+        }
     }
 
     /**
      * Get the path of the current "fail over" table
+     *
      * @return the path of the current "fail over" table
      */
     private String getCurrentFailOverTable() {
-      if (!switched.get()) {
-        return secondaryTable; // if not switched the failover table is the "secondary" table
-      } else {
-        return primaryTable; // if switched the fail overt table is the "primary" table (from initial configuration)
-      }
+        if (isClusterSwitched()) {
+            return secondaryTable; // if not switched the failover table is the "secondary" table
+        } else {
+            return primaryTable; // if switched the fail overt table is the "primary" table (from initial configuration)
+        }
     }
 
+    private boolean isClusterSwitched() {
+        return !switched.get();
+    }
 
     /**
      * Shutdown all executors, close connection to the tables.
