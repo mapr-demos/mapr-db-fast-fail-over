@@ -1115,7 +1115,7 @@ public class EnhancedJSONTable implements Closeable {
             LOG.info("Switch table for - {} ms", timeForSwitchingTableBack);
             swapTableLinks();
             switched.set(true);
-            // We create a task for scheduler, that will change a cluster back after 10s/30s/1m
+            // We create a task for scheduler, that will change a cluster back after 10s/1mn/2mn
             scheduler.schedule(
                     () -> {
                         swapTableLinks();
@@ -1139,9 +1139,9 @@ public class EnhancedJSONTable implements Closeable {
             case 0:
                 return minute / 6;
             case 1:
-                return minute / 2;
-            default:
                 return minute;
+            default:
+                return 2 * minute;
         }
     }
 
