@@ -690,6 +690,18 @@ public class EnhancedJSONTable implements Closeable {
     }
 
     /**
+     * See OJAI flush
+     */
+    public void flush() {
+        try {
+            tryFlush();
+        } catch (IOException | InterruptedException | ExecutionException e) {
+            LOG.error("Problem while execution ", e);
+            throw new RetryPolicyException(e);
+        }
+    }
+
+    /**
      * This private methods:
      * - call find on primary table and secondary table if issue
      * using the <code>performRetryLogicWithOutputData</code> method.
@@ -995,6 +1007,11 @@ public class EnhancedJSONTable implements Closeable {
                 () -> documentStoreHolder.get()[1].replace(stream, fieldAsKey));
     }
 
+    private void tryFlush() throws IOException, InterruptedException, ExecutionException {
+        performRetryLogic(() -> documentStoreHolder.get()[0].flush(),
+                () -> documentStoreHolder.get()[1].flush());
+    }
+
     /**
      * First of all we try to perform operation with the first DocumentStore.
      * If this operation takes a lot of time, we will perform operation with
@@ -1026,7 +1043,7 @@ public class EnhancedJSONTable implements Closeable {
             primaryFuture.get(timeOut, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
 
-            LOG.warn("Processing request to primary {} table too long, trying on secondary {} ",  this.getCurrentActiveTable(), this.getCurrentFailOverTable());
+            LOG.warn("Processing request to primary {} table too long, trying on secondary {} ", this.getCurrentActiveTable(), this.getCurrentFailOverTable());
 
             // If timeOut tie exceeds, we make requests to the second cluster,
             // that will execute in parallel with request to primary cluster
@@ -1075,7 +1092,7 @@ public class EnhancedJSONTable implements Closeable {
         CompletableFuture<R> primaryFuture = CompletableFuture.supplyAsync(primaryTask, tableOperationExecutor);
 
         primaryFuture.exceptionally(throwable -> {
-            LOG.error("Problem while execution with primary table {} ",  this.getCurrentActiveTable());
+            LOG.error("Problem while execution with primary table {} ", this.getCurrentActiveTable());
             throw new RetryPolicyException(throwable);
         });
 
@@ -1083,7 +1100,7 @@ public class EnhancedJSONTable implements Closeable {
             return primaryFuture.get(timeOut, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
 
-            LOG.warn("Processing request to primary {} table too long, trying on secondary {} ",  this.getCurrentActiveTable(), this.getCurrentFailOverTable());
+            LOG.warn("Processing request to primary {} table too long, trying on secondary {} ", this.getCurrentActiveTable(), this.getCurrentFailOverTable());
 
             // If timeOut tie exceeds, we make requests to the second cluster,
             // that will execute in parallel with request to primary cluster
