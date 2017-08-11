@@ -1007,7 +1007,9 @@ public class EnhancedJSONTable implements Closeable {
     private void performRetryLogic(Runnable primaryTask, Runnable secondaryTask)
             throws ExecutionException, InterruptedException {
 
-        CompletableFuture<Void> primaryFuture = CompletableFuture.runAsync(primaryTask, tableOperationExecutor);
+      LOG.debug("Execute operation with Primary : {} , Secondary {}", this.getCurrentActiveTable(), this.getCurrentFailOverTable());
+
+      CompletableFuture<Void> primaryFuture = CompletableFuture.runAsync(primaryTask, tableOperationExecutor);
 
         primaryFuture.exceptionally(throwable -> {
             LOG.error("Problem while execution with primary table ", throwable);
@@ -1018,9 +1020,9 @@ public class EnhancedJSONTable implements Closeable {
             primaryFuture.get(timeOut, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
 
-            LOG.info("Try to perform operation with secondary table");
-            CompletableFuture<Void> secondaryFuture = CompletableFuture.runAsync(secondaryTask, tableOperationExecutor);
+            LOG.warn("Processing request to primary {} table too long, trying on secondary {} ",  this.getCurrentActiveTable(), this.getCurrentFailOverTable());
 
+            CompletableFuture<Void> secondaryFuture = CompletableFuture.runAsync(secondaryTask, tableOperationExecutor);
             secondaryFuture.exceptionally(throwable -> {
                 LOG.error("Problem while execution", throwable);
                 return null;
@@ -1050,8 +1052,9 @@ public class EnhancedJSONTable implements Closeable {
     private <R> R performRetryLogicWithOutputData(Supplier<R> primaryTask, Supplier<R> secondaryTask)
             throws ExecutionException, InterruptedException {
 
-        CompletableFuture<R> primaryFuture = CompletableFuture.supplyAsync(primaryTask, tableOperationExecutor);
+        LOG.debug("Execute operation with Primary : {} , Secondary {}", this.getCurrentActiveTable(), this.getCurrentFailOverTable());
 
+        CompletableFuture<R> primaryFuture = CompletableFuture.supplyAsync(primaryTask, tableOperationExecutor);
         primaryFuture.exceptionally(throwable -> {
             LOG.error("Problem while execution with primary table ", throwable);
             throw new RetryPolicyException(throwable);
@@ -1061,8 +1064,7 @@ public class EnhancedJSONTable implements Closeable {
             return primaryFuture.get(timeOut, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
 
-            LOG.error("Processing request to primary table too long");
-            LOG.info("Try to perform operation with secondary table");
+            LOG.warn("Processing request to primary {} table too long, trying on secondary {} ",  this.getCurrentActiveTable(), this.getCurrentFailOverTable());
 
             CompletableFuture<R> secondaryFuture = CompletableFuture.supplyAsync(secondaryTask, tableOperationExecutor);
 
@@ -1071,7 +1073,7 @@ public class EnhancedJSONTable implements Closeable {
                 throw new RetryPolicyException(throwable);
             });
 
-            // Prepare the system to swtich back to primary
+            // Prepare the system to switch back to primary
             // this method contain the logic to define when to switch back
             int numberOfSwitch = counterForTableSwitching.getAndIncrement();
             createAndExecuteTaskForSwitchingTable(getTimeOut(numberOfSwitch));
@@ -1087,24 +1089,23 @@ public class EnhancedJSONTable implements Closeable {
      */
     private void createAndExecuteTaskForSwitchingTable(long timeForSwitchingTableBack) {
         if (!switched.get()) {
-            LOG.info("Switch table for - {} ms", timeForSwitchingTableBack);
+            LOG.debug("Switch table for - {} ms", timeForSwitchingTableBack);
             swapTableLinks(primaryTable, secondaryTable);
             switched.set(true);
             scheduler.schedule(
                     () -> {
                         swapTableLinks(secondaryTable, primaryTable);
-                        switched.set(false);
-                        LOG.info("TABLE SWITCHED BACK");
+                        switched.set(false); // indicates that we are not in "failovermode"
+                        LOG.warn("Switching back to itinial conf ( Primary : {} , Secondary {}   ) ", primaryTable, secondaryTable);
                     }, timeForSwitchingTableBack, TimeUnit.MILLISECONDS);
         }
     }
 
-    private void returnCounterToDefaultValue() {
-        counterForTableSwitching.set(0);
-    }
 
     /**
      * Determines the amount of time that we need to stay on another table
+     *
+     * TODO : issue #18 initial fail over should be 10s for some reason it "coming back" after restarting a cluster fails
      *
      * @param numberOfSwitch Quantity of table switching
      * @return time in milliseconds
@@ -1121,20 +1122,53 @@ public class EnhancedJSONTable implements Closeable {
         }
     }
 
-    /**
-     * Swap primary and secondary tables
-     */
+  /**
+   * Swap primary and secondary tables
+   *
+   * When failing over to another table/cluster or when going back to origin/master cluster
+   * we do not change the whole logic, but simply switch the primary/secondary tables
+   *
+   *
+   * @param primaryStore : path of the "master/primary" table.
+   * @param secondaryStore : path of the "failover/secondary" table.
+   */
     private void swapTableLinks(String primaryStore, String secondaryStore) {
         while (true) {
             DocumentStore[] origin = documentStoreHolder.get();
-            origin[0] = getJsonTable(primaryStore);
-            origin[1] = getJsonTable(secondaryStore);
+            origin[0] = getJsonTable(primaryStore); // TODO : issue #17 why do we reconnect all the time it looks it is related
+            origin[1] = getJsonTable(secondaryStore); //TODO : to the fail over, but we need to investiage the original issue
             DocumentStore[] swapped = new DocumentStore[]{origin[1], origin[0]};
             if (documentStoreHolder.compareAndSet(origin, swapped)) {
                 return;
             }
         }
     }
+
+
+    /**
+     * Get the path of the current active table
+     * @return the path of the current active table
+     */
+    private String getCurrentActiveTable() {
+      if (!switched.get()) {
+        return primaryTable;
+      } else {
+        return secondaryTable;
+      }
+    }
+
+    /**
+     * Get the path of the current "fail over" table
+     * @return the path of the current "fail over" table
+     */
+    private String getCurrentFailOverTable() {
+      if (!switched.get()) {
+        return secondaryTable; // if not switched the failover table is the "secondary" table
+      } else {
+        return primaryTable; // if switched the fail overt table is the "primary" table (from initial configuration)
+      }
+    }
+
 
     /**
      * Shutdown all executors, close connection to the tables.
