@@ -796,7 +796,7 @@ public class EnhancedJSONTable implements Closeable {
             CompletableFuture<Void> secondaryFuture = CompletableFuture.runAsync(secondaryTask, tableOperationExecutor);
 
             secondaryFuture.exceptionally(throwable -> {
-                LOG.error("Problem while execution", throwable);
+                LOG.error("Problem while execution with fail-over table {} ", this.getCurrentFailOverTable());
                 return null;
             });
 
@@ -805,16 +805,20 @@ public class EnhancedJSONTable implements Closeable {
             secondaryFuture.acceptEitherAsync(primaryFuture, s -> {
                 // Check if the primary request is stuck, if so,
                 // we shut down the executor without completion of a primary request
-                if (!primaryFuture.isDone()) {
+                if (primaryFuture.isCompletedExceptionally() || !primaryFuture.isDone()) {
                     tableOperationExecutor.shutdownNow();
                 }
             });
 
-            // This is for determining time for switching
-            int numberOfSwitch = counterForTableSwitching.getAndIncrement();
-            // Switch to the secondary cluster adn prepare the system to switch back to primary
-            // this method contain the logic to define when to switch back
-            createAndExecuteTaskForSwitchingTable(getTimeOut(numberOfSwitch));
+            secondaryFuture.join();
+
+            if (isClusterSwitched()) {
+                // This is for determining time for switching
+                int numberOfSwitch = counterForTableSwitching.getAndIncrement();
+                // Switch to the secondary cluster adn prepare the system to switch back to primary
+                // this method contain the logic to define when to switch back
+                createAndExecuteTaskForSwitchingTable(getTimeOut(numberOfSwitch));
+            }
         } catch (InterruptedException | ExecutionException e) {
             LOG.error("Fail-over exception", e);
         }
@@ -860,17 +864,20 @@ public class EnhancedJSONTable implements Closeable {
                 throw new RetryPolicyException(throwable);
             });
 
-            // This is for determining time for switching
-            int numberOfSwitch = counterForTableSwitching.getAndIncrement();
-            // Switch to the secondary cluster adn prepare the system to switch back to primary
-            // this method contain the logic to define when to switch back
-            createAndExecuteTaskForSwitchingTable(getTimeOut(numberOfSwitch));
-
             secondaryFuture.acceptEither(primaryFuture, r -> {
             });
 
             // We combine primary and secondary CompletableFuture and return result from the first that will succeed
-            return secondaryFuture.join();
+            R result = secondaryFuture.join();
+
+            if (isClusterSwitched()) {
+                // This is for determining time for switching
+                int numberOfSwitch = counterForTableSwitching.getAndIncrement();
+                // Switch to the secondary cluster adn prepare the system to switch back to primary
+                // this method contain the logic to define when to switch back
+                createAndExecuteTaskForSwitchingTable(getTimeOut(numberOfSwitch));
+            }
+            return result;
         } catch (InterruptedException | ExecutionException e) {
             throw new RetryPolicyException(e);
         }
@@ -882,24 +889,21 @@ public class EnhancedJSONTable implements Closeable {
      * @param timeForSwitchingTableBack Time to return to the initial state
      */
     private void createAndExecuteTaskForSwitchingTable(long timeForSwitchingTableBack) {
-        if (isClusterSwitched()) {
-            LOG.info("Switch table for - {} ms", timeForSwitchingTableBack);
-            swapTableLinks();
-            switched.set(true);
-            // We create a task for scheduler, that will change a cluster back after 10s/1mn/2mn
-            scheduler.schedule(
-                    () -> {
-                        swapTableLinks();
-                        switched.set(false); // indicates that we are not in "failovermode"
-                        LOG.warn("Switching back to initial conf ( Primary : {} , Secondary {}   ) ", primaryTable, secondaryTable);
-                    }, timeForSwitchingTableBack, TimeUnit.MILLISECONDS);
-        }
+        LOG.info("Switch table for - {} ms", timeForSwitchingTableBack);
+        swapTableLinks();
+        switched.set(true);
+        // We create a task for scheduler, that will change a cluster back after 10s/1mn/2mn
+        scheduler.schedule(
+                () -> {
+                    swapTableLinks();
+                    switched.set(false); // indicates that we are not in "failovermode"
+                    LOG.warn("Switching back to initial conf ( Primary : {} , Secondary {}   ) ", primaryTable, secondaryTable);
+                }, timeForSwitchingTableBack, TimeUnit.MILLISECONDS);
     }
 
     /**
      * Determines the amount of time that we need to stay on another table
      * <p>
-     * TODO : issue #18 initial fail over should be 10s for some reason it "coming back" after restarting a cluster fails
      *
      * @param numberOfSwitch Quantity of table switching
      * @return time in milliseconds
