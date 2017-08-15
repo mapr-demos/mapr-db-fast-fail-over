@@ -9,26 +9,27 @@ import org.ojai.store.DocumentMutation;
 import org.ojai.store.DocumentStore;
 import org.ojai.store.Query;
 import org.ojai.store.QueryCondition;
+import org.ojai.store.exceptions.StoreException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.math.BigDecimal;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import static com.mapr.db.Utils.getJsonTable;
+import static org.ojai.annotation.API.NonNullable;
 
-
+/**
+ * EnhancedJSONTable represents a wrapper above {@link DocumentStore} providing a fail-over
+ * strategy that should provide user a high availability of cluster.
+ * For update operations failover is not supported because of consistency problems especially with increment operations.
+ */
 public class EnhancedJSONTable implements Closeable {
 
     private static final Logger LOG = LoggerFactory.getLogger(EnhancedJSONTable.class);
@@ -86,6 +87,16 @@ public class EnhancedJSONTable implements Closeable {
         DocumentStore secondary = getJsonTable(secondaryTable);
 
         this.documentStoreHolder = new AtomicReference<>(new DocumentStore[]{primary, secondary});
+    }
+
+    /**
+     * Performs operation with fail-over
+     *
+     * @see DocumentStore#flush()
+     */
+    public void flush() {
+        processWithFailover(() -> documentStoreHolder.get()[0].flush(),
+                () -> documentStoreHolder.get()[1].flush());
     }
 
     /**
@@ -329,23 +340,25 @@ public class EnhancedJSONTable implements Closeable {
     }
 
     /**
-     * Performs operation with fail-over
+     * Update operations are processed with NO failover strategy!
      *
      * @see DocumentStore#update(String, DocumentMutation)
      */
     public void update(String _id, DocumentMutation mutation) {
-        processWithFailover(() -> documentStoreHolder.get()[0].update(_id, mutation),
-                () -> documentStoreHolder.get()[1].update(_id, mutation));
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].update(_id, mutation);
     }
 
     /**
-     * Performs operation with fail-over
+     * Update operations are processed with NO failover strategy!
      *
      * @see DocumentStore#update(Value, DocumentMutation)
      */
     public void update(Value _id, DocumentMutation mutation) {
-        processWithFailover(() -> documentStoreHolder.get()[0].update(_id, mutation),
-                () -> documentStoreHolder.get()[1].update(_id, mutation));
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].update(_id, mutation);
     }
 
     /**
@@ -589,13 +602,159 @@ public class EnhancedJSONTable implements Closeable {
     }
 
     /**
-     * Performs operation with fail-over
+     * Update operations are processed with NO failover strategy!
      *
-     * @see DocumentStore#flush()
+     * @see DocumentStore#increment(String, String, byte)
      */
-    public void flush() {
-        processWithFailover(() -> documentStoreHolder.get()[0].flush(),
-                () -> documentStoreHolder.get()[1].flush());
+    public void increment(@NonNullable String _id, @NonNullable String field, byte inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, short)
+     */
+    public void increment(@NonNullable String _id, @NonNullable String field, short inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, int)
+     */
+    public void increment(@NonNullable String _id, @NonNullable String field, int inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, long)
+     */
+    public void increment(@NonNullable String _id, @NonNullable String field, long inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, float)
+     */
+    public void increment(@NonNullable String _id, @NonNullable String field, float inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, double)
+     */
+    public void increment(@NonNullable String _id, @NonNullable String field, double inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, BigDecimal)
+     */
+    public void increment(@NonNullable String _id, @NonNullable String field,
+            @NonNullable BigDecimal inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, byte)
+     */
+    public void increment(@NonNullable Value _id, @NonNullable String field, byte inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, short)
+     */
+    public void increment(@NonNullable Value _id, @NonNullable String field, short inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, int)
+     */
+    public void increment(@NonNullable Value _id, @NonNullable String field, int inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, long)
+     */
+    public void increment(@NonNullable Value _id, @NonNullable String field, long inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, float)
+     */
+    public void increment(@NonNullable Value _id, @NonNullable String field, float inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, double)
+     */
+    public void increment(@NonNullable Value _id, @NonNullable String field, double inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
+    }
+
+    /**
+     * Update operations are processed with NO failover strategy!
+     *
+     * @see DocumentStore#increment(String, String, BigDecimal)
+     */
+    public void increment(@NonNullable Value _id, @NonNullable String field,
+            @NonNullable BigDecimal inc) throws StoreException {
+        LOG.warn("Processing update on {} with no failover strategy!" +
+                " Failover for update operations are not supported!", _id);
+        documentStoreHolder.get()[0].increment(_id, field, inc);
     }
 
     /**
