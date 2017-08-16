@@ -75,7 +75,7 @@ public class EnhancedJSONTable implements DocumentStore {
     public EnhancedJSONTable(String primaryTable, String secondaryTable, long timeOut) {
         this.tableNames = new String[]{primaryTable, secondaryTable};
         this.timeOut = timeOut;
-        this.secondaryTimeOut = 10 * timeOut;
+        this.secondaryTimeOut = 15 * timeOut; // TODO (related to #15) Find the way to reduce time for first request to secondary cluster
 
         DocumentStore primary = getDocumentStore(primaryTable);
         DocumentStore secondary = getDocumentStore(secondaryTable);
