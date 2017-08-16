@@ -15,7 +15,7 @@ public class Utils {
      * @param tableName Name that correspond to db table name
      * @return com.mapr.db.Table
      */
-    public static DocumentStore getJsonTable(String tableName) {
+    public static DocumentStore getDocumentStore(String tableName) {
         Connection connection = DriverManager.getConnection(DB_DRIVER_NAME);
         return connection.getStore(tableName);
     }
