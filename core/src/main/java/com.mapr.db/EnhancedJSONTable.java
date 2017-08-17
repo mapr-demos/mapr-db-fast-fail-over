@@ -17,7 +17,15 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.mapr.db.Utils.getDocumentStore;
@@ -36,6 +44,9 @@ public class EnhancedJSONTable implements DocumentStore {
     private DocumentStore[] stores;    // the tables we talk to. Primary is first, then secondary
     private AtomicInteger current =    // the index for stores
             new AtomicInteger(0);
+
+    private AtomicBoolean switched =
+            new AtomicBoolean(false); // Indicates if the table switched in that moment
 
     private String[] tableNames;       // the names of the tables
 
@@ -499,7 +510,7 @@ public class EnhancedJSONTable implements DocumentStore {
         int i = current.get();
         DocumentStore primary = stores[i];
         DocumentStore secondary = stores[1 - i];
-        return doWithFallback(tableOperationExecutor, timeOut, secondaryTimeOut, task, primary, secondary, this::swapTableLinks);
+        return doWithFallback(tableOperationExecutor, timeOut, secondaryTimeOut, task, primary, secondary, this::swapTableLinks, switched);
     }
 
     /**
@@ -509,35 +520,33 @@ public class EnhancedJSONTable implements DocumentStore {
      * failoverTask. When both primary and secondary throw exceptions, we rethrow the
      * last exception received. When both primary and secondary exceed secondaryTimeOut
      * milliseconds with no exceptions and no results, then an exception is thrown.
-     *
+     * <p>
      * This method is static to make testing easier.
      *
-     * @param exec                The executor that does all the work
-     * @param timeOut             How long to wait before invoking the secondary
-     * @param secondaryTimeOut    How long to wait before entirely giving up
-     * @param task                A lambda with one argument, a table, that does the desired operation
-     * @param primary             The primary table
-     * @param secondary           The secondary table
-     * @param failover            The function to call when primary doesn't respond quickly
-     * @param <R>                 The type that task will return
-     * @return                    The value returned by task
-     * @throws StoreException     If both primary and secondary fail
-     * @throws FailoverException  If both primary and secondary fail. This may wrap a real exception
+     * @param exec             The executor that does all the work
+     * @param timeOut          How long to wait before invoking the secondary
+     * @param secondaryTimeOut How long to wait before entirely giving up
+     * @param task             A lambda with one argument, a table, that does the desired operation
+     * @param primary          The primary table
+     * @param secondary        The secondary table
+     * @param failover         The function to call when primary doesn't respond quickly
+     * @param switched         The flag, that indicate that table switched or not
+     * @param <R>              The type that task will return
+     * @return The value returned by task
+     * @throws StoreException    If both primary and secondary fail
+     * @throws FailoverException If both primary and secondary fail. This may wrap a real exception
      */
     static <R> R doWithFallback(ExecutorService exec,
                                 long timeOut, long secondaryTimeOut,
                                 TableFunction<R> task,
                                 DocumentStore primary, DocumentStore secondary,
-                                Runnable failover) {
+                                Runnable failover, AtomicBoolean switched) {
         Future<R> primaryFuture = exec.submit(() -> task.apply(primary));
         try {
             try {
                 // try on the primary table ... if we get a result, we win
                 return primaryFuture.get(timeOut, TimeUnit.MILLISECONDS);
             } catch (TimeoutException | ExecutionException e) {
-                // We have lost confidence in the primary at this point even if we get a result
-                failover.run();
-
                 // No result in time from primary so we now try on either primary or secondary.
                 // Whichever returns first is the winner and the other is cancelled.
                 // Exceptional returns will be held until the other task completes successfully
@@ -547,6 +556,10 @@ public class EnhancedJSONTable implements DocumentStore {
                         primaryFuture::get,
                         () -> task.apply(secondary)
                 );
+                // We have lost confidence in the primary at this point even if we get a result
+                if (!switched.get()) {
+                    failover.run();
+                }
                 return exec.invokeAny(tasks, secondaryTimeOut, TimeUnit.MILLISECONDS);
             }
         } catch (InterruptedException e) {
@@ -574,6 +587,37 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     private void swapTableLinks() {
         current.getAndUpdate(old -> 1 - old);
+        switched.compareAndSet(switched.get(), !switched.get());
+        LOG.info("Table switched: " + switched.get());
+        if (switched.get()) {
+            int stick = counterForTableSwitching.getAndIncrement();
+            LOG.info("Switch table for - {} ms", getTimeOut(stick));
+            swapTableBackAfter(getTimeOut(stick));
+        }
+    }
+
+    private void swapTableBackAfter(long timeout) {
+        scheduler.schedule(
+                this::swapTableLinks, timeout, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Determines the amount of time that we need to stay on another table
+     * <p>
+     *
+     * @param numberOfSwitch Quantity of table switching
+     * @return time in milliseconds
+     */
+    private long getTimeOut(int numberOfSwitch) {
+        long minute = 60000;
+        switch (numberOfSwitch) {
+            case 0:
+                return minute / 6;
+            case 1:
+                return minute;
+            default:
+                return 2 * minute;
+        }
     }
 
     /**

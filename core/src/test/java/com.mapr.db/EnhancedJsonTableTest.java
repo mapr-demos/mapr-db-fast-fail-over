@@ -22,6 +22,7 @@ import java.nio.ByteBuffer;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.*;
 
@@ -172,7 +173,7 @@ public class EnhancedJsonTableTest {
                     exec, 20, 1000,
                     task,
                     a, b,
-                    () -> counts[2]++);
+                    () -> counts[2]++, new AtomicBoolean(false));
             counts[r]++;
         }
         return counts;
