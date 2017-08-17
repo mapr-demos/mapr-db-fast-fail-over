@@ -5,7 +5,6 @@ import org.ojai.Document;
 import org.ojai.DocumentStream;
 import org.ojai.FieldPath;
 import org.ojai.Value;
-import org.ojai.annotation.API;
 import org.ojai.store.DocumentMutation;
 import org.ojai.store.DocumentStore;
 import org.ojai.store.Query;
@@ -17,18 +16,12 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.mapr.db.Utils.getDocumentStore;
+import static org.ojai.annotation.API.NonNullable;
 
 /**
  * EnhancedJSONTable represents a wrapper above {@link DocumentStore} providing a fail-over
@@ -94,408 +87,646 @@ public class EnhancedJSONTable implements DocumentStore {
         this.stores = new DocumentStore[]{primary, secondary};
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean isReadOnly() {
         return doWithFailover(DocumentStore::isReadOnly);
     }
 
     /**
-     * Performs operation with fail-over
-     *
-     * @see DocumentStore#flush()
+     * {@inheritDoc}
      */
     @Override
     public void flush() throws StoreException {
         doNoReturn(DocumentStore::flush);  // TODO verify that this method reference does what is expected
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void beginTrackingWrites() throws StoreException {
         doNoReturn(DocumentStore::beginTrackingWrites);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void beginTrackingWrites(@API.NonNullable String previousWritesContext) throws StoreException {
+    public void beginTrackingWrites(@NonNullable String previousWritesContext) throws StoreException {
         doNoReturn((DocumentStore t) -> t.beginTrackingWrites(previousWritesContext));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String endTrackingWrites() throws StoreException {
         return doWithFailover(DocumentStore::endTrackingWrites);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void clearTrackedWrites() throws StoreException {
         doNoReturn(DocumentStore::clearTrackedWrites);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Document findById(String _id) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.findById(_id));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Document findById(Value _id) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.findById(_id));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Document findById(String _id, String... fieldPaths) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.findById(_id, fieldPaths));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Document findById(String _id, FieldPath... fieldPaths) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.findById(_id, fieldPaths));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Document findById(Value _id, String... fieldPaths) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.findById(_id, fieldPaths));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Document findById(Value value, FieldPath... fieldPaths) throws StoreException {
-        return null;
+        return doWithFailover((DocumentStore t) -> t.findById(value, fieldPaths));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Document findById(String s, QueryCondition queryCondition) throws StoreException {
-        return null;
+        return doWithFailover((DocumentStore t) -> t.findById(s, queryCondition));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Document findById(Value value, QueryCondition queryCondition) throws StoreException {
-        return null;
+        return doWithFailover((DocumentStore t) -> t.findById(value, queryCondition));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Document findById(String s, QueryCondition queryCondition, String... strings) throws StoreException {
-        return null;
+        return doWithFailover((DocumentStore t) -> t.findById(s, queryCondition, strings));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Document findById(String s, QueryCondition queryCondition, FieldPath... fieldPaths) throws StoreException {
-        return null;
+        return doWithFailover((DocumentStore t) -> t.findById(s, queryCondition, fieldPaths));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Document findById(Value value, QueryCondition queryCondition, String... strings) throws StoreException {
-        return null;
+        return doWithFailover((DocumentStore t) -> t.findById(value, queryCondition, strings));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Document findById(Value value, QueryCondition queryCondition, FieldPath... fieldPaths) throws StoreException {
-        return null;
+        return doWithFailover((DocumentStore t) -> t.findById(value, queryCondition, fieldPaths));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public DocumentStream find() throws StoreException {
         return doWithFailover(DocumentStore::find);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public DocumentStream find(String... paths) throws StoreException {
+    public DocumentStream find(@NonNullable String... paths) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.find(paths));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public DocumentStream find(FieldPath... paths) throws StoreException {
+    public DocumentStream find(@NonNullable FieldPath... paths) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.find(paths));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public DocumentStream find(QueryCondition c) throws StoreException {
+    public DocumentStream find(@NonNullable QueryCondition c) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.find(c));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public DocumentStream find(QueryCondition c, String... paths) throws StoreException {
+    public DocumentStream find(@NonNullable QueryCondition c, @NonNullable String... paths) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.find(c, paths));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public DocumentStream find(QueryCondition c, FieldPath... paths) throws StoreException {
+    public DocumentStream find(@NonNullable QueryCondition c, @NonNullable FieldPath... paths) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.find(c, paths));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public DocumentStream findQuery(@API.NonNullable Query query) throws StoreException {
+    public DocumentStream findQuery(@NonNullable Query query) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.findQuery(query));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public DocumentStream findQuery(@API.NonNullable String query) throws StoreException {
+    public DocumentStream findQuery(@NonNullable String query) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.findQuery(query));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insertOrReplace(Document doc) throws StoreException {
+    public void insertOrReplace(@NonNullable Document doc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.insertOrReplace(doc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insertOrReplace(Value _id, Document doc) throws StoreException {
+    public void insertOrReplace(@NonNullable Value _id, @NonNullable Document doc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.insertOrReplace(_id, doc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insertOrReplace(Document doc, FieldPath fieldAsKey) throws StoreException {
+    public void insertOrReplace(@NonNullable Document doc, @NonNullable FieldPath fieldAsKey) throws StoreException {
         doNoReturn((DocumentStore t) -> t.insertOrReplace(doc, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insertOrReplace(Document doc, String fieldAsKey) throws StoreException {
+    public void insertOrReplace(@NonNullable Document doc, @NonNullable String fieldAsKey) throws StoreException {
         doNoReturn((DocumentStore t) -> t.insertOrReplace(doc, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insertOrReplace(DocumentStream stream) throws MultiOpException {
+    public void insertOrReplace(@NonNullable DocumentStream stream) throws MultiOpException {
         doNoReturn((DocumentStore t) -> t.insertOrReplace(stream));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insertOrReplace(DocumentStream stream, FieldPath fieldAsKey) throws MultiOpException {
+    public void insertOrReplace(@NonNullable DocumentStream stream, @NonNullable FieldPath fieldAsKey) throws MultiOpException {
         doNoReturn((DocumentStore t) -> t.insertOrReplace(stream, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insertOrReplace(DocumentStream stream, String fieldAsKey) throws MultiOpException {
+    public void insertOrReplace(@NonNullable DocumentStream stream, @NonNullable String fieldAsKey) throws MultiOpException {
         doNoReturn((DocumentStore t) -> t.insertOrReplace(stream, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insertOrReplace(@API.NonNullable String _id, @API.NonNullable Document doc) throws StoreException {
+    public void insertOrReplace(@NonNullable String _id, @NonNullable Document doc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.insert(_id, doc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insert(@API.NonNullable String _id, @API.NonNullable Document doc) throws StoreException {
+    public void insert(@NonNullable String _id, @NonNullable Document doc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.insert(_id, doc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void update(Value _id, DocumentMutation m) throws StoreException {
+    public void update(@NonNullable Value _id, @NonNullable DocumentMutation m) throws StoreException {
         doNoReturn((DocumentStore t) -> t.update(_id, m));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void update(@API.NonNullable String _id, @API.NonNullable DocumentMutation mutation) throws StoreException {
+    public void update(@NonNullable String _id, @NonNullable DocumentMutation mutation) throws StoreException {
         doNoReturn((DocumentStore t) -> t.update(_id, mutation));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void delete(@API.NonNullable String _id) throws StoreException {
+    public void delete(@NonNullable String _id) throws StoreException {
         doNoReturn((DocumentStore t) -> t.delete(_id));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void delete(Value _id) throws StoreException {
+    public void delete(@NonNullable Value _id) throws StoreException {
         doNoReturn((DocumentStore t) -> t.delete(_id));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void delete(Document doc) throws StoreException {
+    public void delete(@NonNullable Document doc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.delete(doc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void delete(Document doc, FieldPath fieldAsKey) throws StoreException {
+    public void delete(@NonNullable Document doc, @NonNullable FieldPath fieldAsKey) throws StoreException {
         doNoReturn((DocumentStore t) -> t.delete(doc, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void delete(Document doc, String fieldAsKey) throws StoreException {
+    public void delete(@NonNullable Document doc, @NonNullable String fieldAsKey) throws StoreException {
         doNoReturn((DocumentStore t) -> t.delete(doc, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void delete(DocumentStream stream) throws MultiOpException {
+    public void delete(@NonNullable DocumentStream stream) throws MultiOpException {
         doNoReturn((DocumentStore t) -> t.delete(stream));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void delete(DocumentStream stream, FieldPath fieldAsKey) throws MultiOpException {
+    public void delete(@NonNullable DocumentStream stream, @NonNullable FieldPath fieldAsKey) throws MultiOpException {
         doNoReturn((DocumentStore t) -> t.delete(stream, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void delete(DocumentStream stream, String fieldAsKey) throws MultiOpException {
+    public void delete(@NonNullable DocumentStream stream, @NonNullable String fieldAsKey) throws MultiOpException {
         doNoReturn((DocumentStore t) -> t.delete(stream, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insert(Value _id, Document doc) throws StoreException {
+    public void insert(@NonNullable Value _id, @NonNullable Document doc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.insert(_id, doc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insert(Document doc) throws StoreException {
+    public void insert(@NonNullable Document doc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.insert(doc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insert(Document doc, FieldPath fieldAsKey) throws StoreException {
+    public void insert(@NonNullable Document doc, @NonNullable FieldPath fieldAsKey) throws StoreException {
         doNoReturn((DocumentStore t) -> t.insert(doc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insert(Document doc, String fieldAsKey) throws StoreException {
+    public void insert(@NonNullable Document doc, @NonNullable String fieldAsKey) throws StoreException {
         doNoReturn((DocumentStore t) -> t.insert(doc, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insert(DocumentStream stream) throws MultiOpException {
+    public void insert(@NonNullable DocumentStream stream) throws MultiOpException {
         doNoReturn((DocumentStore t) -> t.insert(stream));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insert(DocumentStream stream, FieldPath fieldAsKey) throws MultiOpException {
+    public void insert(@NonNullable DocumentStream stream, @NonNullable FieldPath fieldAsKey) throws MultiOpException {
         doNoReturn((DocumentStore t) -> t.insert(stream, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void insert(DocumentStream stream, String fieldAsKey) throws MultiOpException {
+    public void insert(@NonNullable DocumentStream stream, @NonNullable String fieldAsKey) throws MultiOpException {
         doNoReturn((DocumentStore t) -> t.insert(stream, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void replace(@API.NonNullable String _id, @API.NonNullable Document doc) throws StoreException {
+    public void replace(@NonNullable String _id, @NonNullable Document doc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.replace(_id, doc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void replace(Value _id, Document doc) throws StoreException {
+    public void replace(@NonNullable Value _id, @NonNullable Document doc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.replace(_id, doc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void replace(Document doc) throws StoreException {
+    public void replace(@NonNullable Document doc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.replace(doc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void replace(Document doc, FieldPath fieldAsKey) throws StoreException {
+    public void replace(@NonNullable Document doc, @NonNullable FieldPath fieldAsKey) throws StoreException {
         doNoReturn((DocumentStore t) -> t.replace(doc, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void replace(Document doc, String fieldAsKey) throws StoreException {
+    public void replace(@NonNullable Document doc, @NonNullable String fieldAsKey) throws StoreException {
         doNoReturn((DocumentStore t) -> t.replace(doc, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void replace(DocumentStream stream) throws MultiOpException {
+    public void replace(@NonNullable DocumentStream stream) throws MultiOpException {
         doNoReturn((DocumentStore t) -> t.replace(stream));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void replace(DocumentStream stream, FieldPath fieldAsKey) throws MultiOpException {
+    public void replace(@NonNullable DocumentStream stream, @NonNullable FieldPath fieldAsKey) throws MultiOpException {
         doNoReturn((DocumentStore t) -> t.replace(stream, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void replace(DocumentStream stream, String fieldAsKey) throws MultiOpException {
+    public void replace(@NonNullable DocumentStream stream, @NonNullable String fieldAsKey) throws MultiOpException {
         doNoReturn((DocumentStore t) -> t.replace(stream, fieldAsKey));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(@API.NonNullable String _id, @API.NonNullable String field, byte inc) throws StoreException {
+    public void increment(@NonNullable String _id, @NonNullable String field, byte inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(@API.NonNullable String _id, @API.NonNullable String field, short inc) throws StoreException {
+    public void increment(@NonNullable String _id, @NonNullable String field, short inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(@API.NonNullable String _id, @API.NonNullable String field, int inc) throws StoreException {
+    public void increment(@NonNullable String _id, @NonNullable String field, int inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(@API.NonNullable String _id, @API.NonNullable String field, long inc) throws StoreException {
+    public void increment(@NonNullable String _id, @NonNullable String field, long inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(@API.NonNullable String _id, @API.NonNullable String field, float inc) throws StoreException {
+    public void increment(@NonNullable String _id, @NonNullable String field, float inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(@API.NonNullable String _id, @API.NonNullable String field, double inc) throws StoreException {
+    public void increment(@NonNullable String _id, @NonNullable String field, double inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(@API.NonNullable String _id, @API.NonNullable String field, @API.NonNullable BigDecimal inc) throws StoreException {
+    public void increment(@NonNullable String _id, @NonNullable String field, @NonNullable BigDecimal inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(Value _id, String field, byte inc) throws StoreException {
+    public void increment(@NonNullable Value _id, @NonNullable String field, byte inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(Value _id, String field, short inc) throws StoreException {
+    public void increment(@NonNullable Value _id, @NonNullable String field, short inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(Value _id, String field, int inc) throws StoreException {
+    public void increment(@NonNullable Value _id, @NonNullable String field, int inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(Value _id, String field, long inc) throws StoreException {
+    public void increment(@NonNullable Value _id, @NonNullable String field, long inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(Value _id, String field, float inc) throws StoreException {
+    public void increment(@NonNullable Value _id, @NonNullable String field, float inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(Value _id, String field, double inc) throws StoreException {
+    public void increment(@NonNullable Value _id, @NonNullable String field, double inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public void increment(Value _id, String field, BigDecimal inc) throws StoreException {
+    public void increment(@NonNullable Value _id, @NonNullable String field, @NonNullable BigDecimal inc) throws StoreException {
         doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public boolean checkAndMutate(@API.NonNullable String _id, @API.NonNullable QueryCondition condition, @API.NonNullable DocumentMutation mutation) throws StoreException {
+    public boolean checkAndMutate(@NonNullable String _id, @NonNullable QueryCondition condition,
+            @NonNullable DocumentMutation mutation) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.checkAndMutate(_id, condition, mutation));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public boolean checkAndDelete(@API.NonNullable String _id, @API.NonNullable QueryCondition condition) throws StoreException {
+    public boolean checkAndDelete(@NonNullable String _id, @NonNullable QueryCondition condition) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.checkAndDelete(_id, condition));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public boolean checkAndReplace(@API.NonNullable String _id, @API.NonNullable QueryCondition condition, @API.NonNullable Document doc) throws StoreException {
+    public boolean checkAndReplace(@NonNullable String _id, @NonNullable QueryCondition condition,
+            @NonNullable Document doc) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.checkAndReplace(_id, condition, doc));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public boolean checkAndMutate(Value _id, QueryCondition condition, DocumentMutation m) throws StoreException {
+    public boolean checkAndMutate(@NonNullable Value _id, @NonNullable QueryCondition condition,
+            @NonNullable DocumentMutation m) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.checkAndMutate(_id, condition, m));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public boolean checkAndDelete(Value _id, QueryCondition condition) throws StoreException {
+    public boolean checkAndDelete(@NonNullable Value _id, @NonNullable QueryCondition condition) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.checkAndDelete(_id, condition));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public boolean checkAndReplace(Value _id, QueryCondition condition, Document doc) throws StoreException {
+    public boolean checkAndReplace(@NonNullable Value _id, @NonNullable QueryCondition condition, @NonNullable Document doc) throws StoreException {
         return doWithFailover((DocumentStore t) -> t.checkAndReplace(_id, condition, doc));
     }
 
@@ -510,7 +741,8 @@ public class EnhancedJSONTable implements DocumentStore {
         int i = current.get();
         DocumentStore primary = stores[i];
         DocumentStore secondary = stores[1 - i];
-        return doWithFallback(tableOperationExecutor, timeOut, secondaryTimeOut, task, primary, secondary, this::swapTableLinks, switched);
+        return doWithFallback(tableOperationExecutor, timeOut, secondaryTimeOut, task, primary, secondary,
+                this::swapTableLinks, switched);
     }
 
     /**
@@ -537,10 +769,10 @@ public class EnhancedJSONTable implements DocumentStore {
      * @throws FailoverException If both primary and secondary fail. This may wrap a real exception
      */
     static <R> R doWithFallback(ExecutorService exec,
-                                long timeOut, long secondaryTimeOut,
-                                TableFunction<R> task,
-                                DocumentStore primary, DocumentStore secondary,
-                                Runnable failover, AtomicBoolean switched) {
+            long timeOut, long secondaryTimeOut,
+            TableFunction<R> task,
+            DocumentStore primary, DocumentStore secondary,
+            Runnable failover, AtomicBoolean switched) {
         Future<R> primaryFuture = exec.submit(() -> task.apply(primary));
         try {
             try {
