@@ -5,8 +5,10 @@ import org.ojai.Document;
 import org.ojai.DocumentStream;
 import org.ojai.FieldPath;
 import org.ojai.Value;
+import org.ojai.store.Connection;
 import org.ojai.store.DocumentMutation;
 import org.ojai.store.DocumentStore;
+import org.ojai.store.DriverManager;
 import org.ojai.store.Query;
 import org.ojai.store.QueryCondition;
 import org.ojai.store.exceptions.MultiOpException;
@@ -16,11 +18,17 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.mapr.db.Utils.getDocumentStore;
 import static org.ojai.annotation.API.NonNullable;
 
 /**
@@ -30,6 +38,13 @@ import static org.ojai.annotation.API.NonNullable;
  */
 public class EnhancedJSONTable implements DocumentStore {
     private static final Logger LOG = LoggerFactory.getLogger(EnhancedJSONTable.class);
+
+    private static final String DB_DRIVER_NAME = "ojai:mapr:";
+
+    /**
+     * Variable that indicates that request is safe for failover
+     */
+    private static final boolean SAFE = true;
 
     private long timeOut;              // How long to wait before starting secondary query
     private long secondaryTimeOut;     // How long to wait before giving up on a good result
@@ -56,6 +71,33 @@ public class EnhancedJSONTable implements DocumentStore {
      * Service that schedules failback operations
      */
     private ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+
+    /**
+     * Do we need use failover for medium dangerous operations with db.
+     * If true than we perform failover for this operations.
+     */
+    private boolean mediumDangerous = false;
+
+    /**
+     * Do we need use failover for non idempotent operations with db
+     * If true than we perform failover for this operations.
+     */
+    private boolean veryDangerous = false;
+
+    /**
+     * Create a new JSON store that with a primary table and secondary table. The application will automatically switch
+     * to the secondary table if the operation on primary is not successful in less than 500ms.
+     *
+     * @param primaryTable   the primary table used by the application
+     * @param secondaryTable the table used in case of fail over
+     * @param medium         the flag that needed for determining what to do with medium dangerous operations, by default false
+     * @param hard           the flag that needed for determining what to do with non idempotent operations, by default false
+     */
+    public EnhancedJSONTable(String primaryTable, String secondaryTable, long timeOut, boolean medium, boolean hard) {
+        this(primaryTable, secondaryTable, timeOut);
+        this.mediumDangerous = medium;
+        this.veryDangerous = hard;
+    }
 
     /**
      * Create a new JSON store that with a primary table and secondary table. The application will automatically switch
@@ -87,12 +129,28 @@ public class EnhancedJSONTable implements DocumentStore {
         this.stores = new DocumentStore[]{primary, secondary};
     }
 
+    public boolean isMediumDangerous() {
+        return mediumDangerous;
+    }
+
+    public void setMediumDangerous(boolean mediumDangerous) {
+        this.mediumDangerous = mediumDangerous;
+    }
+
+    public boolean isVeryDangerous() {
+        return veryDangerous;
+    }
+
+    public void setVeryDangerous(boolean veryDangerous) {
+        this.veryDangerous = veryDangerous;
+    }
+
     /**
      * {@inheritDoc}
      */
     @Override
     public boolean isReadOnly() {
-        return doWithFailover(DocumentStore::isReadOnly);
+        return checkAndDoWithFailover(DocumentStore::isReadOnly, SAFE);
     }
 
     /**
@@ -100,7 +158,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void flush() throws StoreException {
-        doNoReturn(DocumentStore::flush);  // TODO verify that this method reference does what is expected
+        doNoReturn(DocumentStore::flush, SAFE);  // TODO verify that this method reference does what is expected
     }
 
     /**
@@ -108,7 +166,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void beginTrackingWrites() throws StoreException {
-        doNoReturn(DocumentStore::beginTrackingWrites);
+        doNoReturn(DocumentStore::beginTrackingWrites, veryDangerous);
     }
 
     /**
@@ -116,7 +174,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void beginTrackingWrites(@NonNullable String previousWritesContext) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.beginTrackingWrites(previousWritesContext));
+        doNoReturn((DocumentStore t) -> t.beginTrackingWrites(previousWritesContext), veryDangerous);
     }
 
     /**
@@ -124,7 +182,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public String endTrackingWrites() throws StoreException {
-        return doWithFailover(DocumentStore::endTrackingWrites);
+        return checkAndDoWithFailover(DocumentStore::endTrackingWrites, veryDangerous);
     }
 
     /**
@@ -132,7 +190,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void clearTrackedWrites() throws StoreException {
-        doNoReturn(DocumentStore::clearTrackedWrites);
+        doNoReturn(DocumentStore::clearTrackedWrites, veryDangerous);
     }
 
     /**
@@ -140,7 +198,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public Document findById(String _id) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findById(_id));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findById(_id), SAFE);
     }
 
     /**
@@ -148,7 +206,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public Document findById(Value _id) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findById(_id));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findById(_id), SAFE);
     }
 
     /**
@@ -156,7 +214,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public Document findById(String _id, String... fieldPaths) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findById(_id, fieldPaths));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findById(_id, fieldPaths), SAFE);
     }
 
     /**
@@ -164,7 +222,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public Document findById(String _id, FieldPath... fieldPaths) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findById(_id, fieldPaths));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findById(_id, fieldPaths), SAFE);
     }
 
     /**
@@ -172,7 +230,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public Document findById(Value _id, String... fieldPaths) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findById(_id, fieldPaths));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findById(_id, fieldPaths), SAFE);
     }
 
     /**
@@ -180,7 +238,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public Document findById(Value value, FieldPath... fieldPaths) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findById(value, fieldPaths));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findById(value, fieldPaths), SAFE);
     }
 
     /**
@@ -188,7 +246,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public Document findById(String s, QueryCondition queryCondition) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findById(s, queryCondition));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findById(s, queryCondition), SAFE);
     }
 
     /**
@@ -196,7 +254,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public Document findById(Value value, QueryCondition queryCondition) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findById(value, queryCondition));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findById(value, queryCondition), SAFE);
     }
 
     /**
@@ -204,7 +262,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public Document findById(String s, QueryCondition queryCondition, String... strings) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findById(s, queryCondition, strings));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findById(s, queryCondition, strings), SAFE);
     }
 
     /**
@@ -212,7 +270,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public Document findById(String s, QueryCondition queryCondition, FieldPath... fieldPaths) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findById(s, queryCondition, fieldPaths));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findById(s, queryCondition, fieldPaths), SAFE);
     }
 
     /**
@@ -220,7 +278,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public Document findById(Value value, QueryCondition queryCondition, String... strings) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findById(value, queryCondition, strings));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findById(value, queryCondition, strings), SAFE);
     }
 
     /**
@@ -228,7 +286,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public Document findById(Value value, QueryCondition queryCondition, FieldPath... fieldPaths) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findById(value, queryCondition, fieldPaths));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findById(value, queryCondition, fieldPaths), SAFE);
     }
 
     /**
@@ -236,7 +294,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public DocumentStream find() throws StoreException {
-        return doWithFailover(DocumentStore::find);
+        return checkAndDoWithFailover(DocumentStore::find, SAFE);
     }
 
     /**
@@ -244,7 +302,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public DocumentStream find(@NonNullable String... paths) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.find(paths));
+        return checkAndDoWithFailover((DocumentStore t) -> t.find(paths), SAFE);
     }
 
     /**
@@ -252,7 +310,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public DocumentStream find(@NonNullable FieldPath... paths) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.find(paths));
+        return checkAndDoWithFailover((DocumentStore t) -> t.find(paths), SAFE);
     }
 
     /**
@@ -260,7 +318,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public DocumentStream find(@NonNullable QueryCondition c) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.find(c));
+        return checkAndDoWithFailover((DocumentStore t) -> t.find(c), SAFE);
     }
 
     /**
@@ -268,7 +326,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public DocumentStream find(@NonNullable QueryCondition c, @NonNullable String... paths) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.find(c, paths));
+        return checkAndDoWithFailover((DocumentStore t) -> t.find(c, paths), SAFE);
     }
 
     /**
@@ -276,7 +334,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public DocumentStream find(@NonNullable QueryCondition c, @NonNullable FieldPath... paths) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.find(c, paths));
+        return checkAndDoWithFailover((DocumentStore t) -> t.find(c, paths), SAFE);
     }
 
     /**
@@ -284,7 +342,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public DocumentStream findQuery(@NonNullable Query query) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findQuery(query));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findQuery(query), SAFE);
     }
 
     /**
@@ -292,7 +350,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public DocumentStream findQuery(@NonNullable String query) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.findQuery(query));
+        return checkAndDoWithFailover((DocumentStore t) -> t.findQuery(query), SAFE);
     }
 
     /**
@@ -300,7 +358,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insertOrReplace(@NonNullable Document doc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.insertOrReplace(doc));
+        doNoReturn((DocumentStore t) -> t.insertOrReplace(doc), SAFE);
     }
 
     /**
@@ -308,7 +366,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insertOrReplace(@NonNullable Value _id, @NonNullable Document doc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.insertOrReplace(_id, doc));
+        doNoReturn((DocumentStore t) -> t.insertOrReplace(_id, doc), SAFE);
     }
 
     /**
@@ -316,7 +374,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insertOrReplace(@NonNullable Document doc, @NonNullable FieldPath fieldAsKey) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.insertOrReplace(doc, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.insertOrReplace(doc, fieldAsKey), SAFE);
     }
 
     /**
@@ -324,7 +382,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insertOrReplace(@NonNullable Document doc, @NonNullable String fieldAsKey) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.insertOrReplace(doc, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.insertOrReplace(doc, fieldAsKey), SAFE);
     }
 
     /**
@@ -332,7 +390,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insertOrReplace(@NonNullable DocumentStream stream) throws MultiOpException {
-        doNoReturn((DocumentStore t) -> t.insertOrReplace(stream));
+        doNoReturn((DocumentStore t) -> t.insertOrReplace(stream), SAFE);
     }
 
     /**
@@ -340,7 +398,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insertOrReplace(@NonNullable DocumentStream stream, @NonNullable FieldPath fieldAsKey) throws MultiOpException {
-        doNoReturn((DocumentStore t) -> t.insertOrReplace(stream, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.insertOrReplace(stream, fieldAsKey), SAFE);
     }
 
     /**
@@ -348,7 +406,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insertOrReplace(@NonNullable DocumentStream stream, @NonNullable String fieldAsKey) throws MultiOpException {
-        doNoReturn((DocumentStore t) -> t.insertOrReplace(stream, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.insertOrReplace(stream, fieldAsKey), SAFE);
     }
 
     /**
@@ -356,7 +414,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insertOrReplace(@NonNullable String _id, @NonNullable Document doc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.insert(_id, doc));
+        doNoReturn((DocumentStore t) -> t.insert(_id, doc), SAFE);
     }
 
     /**
@@ -364,7 +422,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insert(@NonNullable String _id, @NonNullable Document doc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.insert(_id, doc));
+        doNoReturn((DocumentStore t) -> t.insert(_id, doc), SAFE);
     }
 
     /**
@@ -372,7 +430,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void update(@NonNullable Value _id, @NonNullable DocumentMutation m) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.update(_id, m));
+        doNoReturn((DocumentStore t) -> t.update(_id, m), SAFE);
     }
 
     /**
@@ -380,7 +438,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void update(@NonNullable String _id, @NonNullable DocumentMutation mutation) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.update(_id, mutation));
+        doNoReturn((DocumentStore t) -> t.update(_id, mutation), SAFE);
     }
 
     /**
@@ -388,7 +446,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void delete(@NonNullable String _id) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.delete(_id));
+        doNoReturn((DocumentStore t) -> t.delete(_id), SAFE);
     }
 
     /**
@@ -396,7 +454,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void delete(@NonNullable Value _id) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.delete(_id));
+        doNoReturn((DocumentStore t) -> t.delete(_id), SAFE);
     }
 
     /**
@@ -404,7 +462,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void delete(@NonNullable Document doc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.delete(doc));
+        doNoReturn((DocumentStore t) -> t.delete(doc), SAFE);
     }
 
     /**
@@ -412,7 +470,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void delete(@NonNullable Document doc, @NonNullable FieldPath fieldAsKey) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.delete(doc, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.delete(doc, fieldAsKey), SAFE);
     }
 
     /**
@@ -420,7 +478,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void delete(@NonNullable Document doc, @NonNullable String fieldAsKey) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.delete(doc, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.delete(doc, fieldAsKey), SAFE);
     }
 
     /**
@@ -428,7 +486,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void delete(@NonNullable DocumentStream stream) throws MultiOpException {
-        doNoReturn((DocumentStore t) -> t.delete(stream));
+        doNoReturn((DocumentStore t) -> t.delete(stream), SAFE);
     }
 
     /**
@@ -436,7 +494,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void delete(@NonNullable DocumentStream stream, @NonNullable FieldPath fieldAsKey) throws MultiOpException {
-        doNoReturn((DocumentStore t) -> t.delete(stream, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.delete(stream, fieldAsKey), SAFE);
     }
 
     /**
@@ -444,7 +502,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void delete(@NonNullable DocumentStream stream, @NonNullable String fieldAsKey) throws MultiOpException {
-        doNoReturn((DocumentStore t) -> t.delete(stream, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.delete(stream, fieldAsKey), SAFE);
     }
 
     /**
@@ -452,7 +510,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insert(@NonNullable Value _id, @NonNullable Document doc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.insert(_id, doc));
+        doNoReturn((DocumentStore t) -> t.insert(_id, doc), SAFE);
     }
 
     /**
@@ -460,7 +518,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insert(@NonNullable Document doc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.insert(doc));
+        doNoReturn((DocumentStore t) -> t.insert(doc), SAFE);
     }
 
     /**
@@ -468,7 +526,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insert(@NonNullable Document doc, @NonNullable FieldPath fieldAsKey) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.insert(doc));
+        doNoReturn((DocumentStore t) -> t.insert(doc), SAFE);
     }
 
     /**
@@ -476,7 +534,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insert(@NonNullable Document doc, @NonNullable String fieldAsKey) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.insert(doc, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.insert(doc, fieldAsKey), SAFE);
     }
 
     /**
@@ -484,7 +542,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insert(@NonNullable DocumentStream stream) throws MultiOpException {
-        doNoReturn((DocumentStore t) -> t.insert(stream));
+        doNoReturn((DocumentStore t) -> t.insert(stream), SAFE);
     }
 
     /**
@@ -492,7 +550,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insert(@NonNullable DocumentStream stream, @NonNullable FieldPath fieldAsKey) throws MultiOpException {
-        doNoReturn((DocumentStore t) -> t.insert(stream, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.insert(stream, fieldAsKey), SAFE);
     }
 
     /**
@@ -500,7 +558,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void insert(@NonNullable DocumentStream stream, @NonNullable String fieldAsKey) throws MultiOpException {
-        doNoReturn((DocumentStore t) -> t.insert(stream, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.insert(stream, fieldAsKey), SAFE);
     }
 
     /**
@@ -508,7 +566,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void replace(@NonNullable String _id, @NonNullable Document doc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.replace(_id, doc));
+        doNoReturn((DocumentStore t) -> t.replace(_id, doc), mediumDangerous);
     }
 
     /**
@@ -516,7 +574,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void replace(@NonNullable Value _id, @NonNullable Document doc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.replace(_id, doc));
+        doNoReturn((DocumentStore t) -> t.replace(_id, doc), mediumDangerous);
     }
 
     /**
@@ -524,7 +582,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void replace(@NonNullable Document doc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.replace(doc));
+        doNoReturn((DocumentStore t) -> t.replace(doc), mediumDangerous);
     }
 
     /**
@@ -532,7 +590,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void replace(@NonNullable Document doc, @NonNullable FieldPath fieldAsKey) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.replace(doc, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.replace(doc, fieldAsKey), mediumDangerous);
     }
 
     /**
@@ -540,7 +598,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void replace(@NonNullable Document doc, @NonNullable String fieldAsKey) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.replace(doc, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.replace(doc, fieldAsKey), mediumDangerous);
     }
 
     /**
@@ -548,7 +606,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void replace(@NonNullable DocumentStream stream) throws MultiOpException {
-        doNoReturn((DocumentStore t) -> t.replace(stream));
+        doNoReturn((DocumentStore t) -> t.replace(stream), mediumDangerous);
     }
 
     /**
@@ -556,7 +614,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void replace(@NonNullable DocumentStream stream, @NonNullable FieldPath fieldAsKey) throws MultiOpException {
-        doNoReturn((DocumentStore t) -> t.replace(stream, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.replace(stream, fieldAsKey), mediumDangerous);
     }
 
     /**
@@ -564,7 +622,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void replace(@NonNullable DocumentStream stream, @NonNullable String fieldAsKey) throws MultiOpException {
-        doNoReturn((DocumentStore t) -> t.replace(stream, fieldAsKey));
+        doNoReturn((DocumentStore t) -> t.replace(stream, fieldAsKey), mediumDangerous);
     }
 
     /**
@@ -572,7 +630,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable String _id, @NonNullable String field, byte inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -580,7 +638,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable String _id, @NonNullable String field, short inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -588,7 +646,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable String _id, @NonNullable String field, int inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -596,7 +654,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable String _id, @NonNullable String field, long inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -604,7 +662,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable String _id, @NonNullable String field, float inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -612,7 +670,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable String _id, @NonNullable String field, double inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -620,7 +678,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable String _id, @NonNullable String field, @NonNullable BigDecimal inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -628,7 +686,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable Value _id, @NonNullable String field, byte inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -636,7 +694,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable Value _id, @NonNullable String field, short inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -644,7 +702,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable Value _id, @NonNullable String field, int inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -652,7 +710,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable Value _id, @NonNullable String field, long inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -660,7 +718,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable Value _id, @NonNullable String field, float inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -668,7 +726,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable Value _id, @NonNullable String field, double inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -676,7 +734,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public void increment(@NonNullable Value _id, @NonNullable String field, @NonNullable BigDecimal inc) throws StoreException {
-        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc));
+        doNoReturn((DocumentStore t) -> t.increment(_id, field, inc), veryDangerous);
     }
 
     /**
@@ -684,8 +742,8 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public boolean checkAndMutate(@NonNullable String _id, @NonNullable QueryCondition condition,
-            @NonNullable DocumentMutation mutation) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.checkAndMutate(_id, condition, mutation));
+                                  @NonNullable DocumentMutation mutation) throws StoreException {
+        return checkAndDoWithFailover((DocumentStore t) -> t.checkAndMutate(_id, condition, mutation), veryDangerous);
     }
 
     /**
@@ -693,7 +751,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public boolean checkAndDelete(@NonNullable String _id, @NonNullable QueryCondition condition) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.checkAndDelete(_id, condition));
+        return checkAndDoWithFailover((DocumentStore t) -> t.checkAndDelete(_id, condition), veryDangerous);
     }
 
     /**
@@ -701,8 +759,8 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public boolean checkAndReplace(@NonNullable String _id, @NonNullable QueryCondition condition,
-            @NonNullable Document doc) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.checkAndReplace(_id, condition, doc));
+                                   @NonNullable Document doc) throws StoreException {
+        return checkAndDoWithFailover((DocumentStore t) -> t.checkAndReplace(_id, condition, doc), veryDangerous);
     }
 
     /**
@@ -710,8 +768,8 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public boolean checkAndMutate(@NonNullable Value _id, @NonNullable QueryCondition condition,
-            @NonNullable DocumentMutation m) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.checkAndMutate(_id, condition, m));
+                                  @NonNullable DocumentMutation m) throws StoreException {
+        return checkAndDoWithFailover((DocumentStore t) -> t.checkAndMutate(_id, condition, m), veryDangerous);
     }
 
     /**
@@ -719,7 +777,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public boolean checkAndDelete(@NonNullable Value _id, @NonNullable QueryCondition condition) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.checkAndDelete(_id, condition));
+        return checkAndDoWithFailover((DocumentStore t) -> t.checkAndDelete(_id, condition), veryDangerous);
     }
 
     /**
@@ -727,22 +785,52 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     @Override
     public boolean checkAndReplace(@NonNullable Value _id, @NonNullable QueryCondition condition, @NonNullable Document doc) throws StoreException {
-        return doWithFailover((DocumentStore t) -> t.checkAndReplace(_id, condition, doc));
+        return checkAndDoWithFailover((DocumentStore t) -> t.checkAndReplace(_id, condition, doc), veryDangerous);
     }
 
-    private void doNoReturn(TableProcedure task) {
-        doWithFailover((DocumentStore t) -> {
+    private void doNoReturn(TableProcedure task, boolean withFailover) {
+        checkAndDoWithFailover((DocumentStore t) -> {
             task.apply(t);
             return null;
-        });
+        }, withFailover);
     }
 
-    private <R> R doWithFailover(TableFunction<R> task) {
+    private <R> R checkAndDoWithFailover(TableFunction<R> task, boolean withFailover) {
         int i = current.get();
         DocumentStore primary = stores[i];
         DocumentStore secondary = stores[1 - i];
-        return doWithFallback(tableOperationExecutor, timeOut, secondaryTimeOut, task, primary, secondary,
-                this::swapTableLinks, switched);
+        if (withFailover) {
+            return doWithFallback(tableOperationExecutor, timeOut, secondaryTimeOut, task, primary, secondary,
+                    this::swapTableLinks, switched);
+        } else {
+            return doWithoutFailover(task, primary);
+        }
+    }
+
+    /**
+     * Process request to db without Failover
+     *
+     * @param task    A lambda with one argument, a table, that does the desired operation
+     * @param primary The primary table
+     * @param <R>     The type that task will return
+     * @return The value returned by task
+     */
+    private <R> R doWithoutFailover(TableFunction<R> task, DocumentStore primary) {
+        try {
+            return tableOperationExecutor.submit(() -> task.apply(primary)).get();
+        } catch (InterruptedException e) {
+            // this should never happen except perhaps in debugging or on shutdown
+            throw new FailoverException("Thread was interrupted during operation", e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException) {
+                // these are likely StoreException, but we don't differentiate
+                throw (RuntimeException) cause;
+            } else {
+                // this should not happen in our situation since none of the methods do this
+                throw new FailoverException("Checked exception thrown (shouldn't happen)", cause);
+            }
+        }
     }
 
     /**
@@ -769,16 +857,20 @@ public class EnhancedJSONTable implements DocumentStore {
      * @throws FailoverException If both primary and secondary fail. This may wrap a real exception
      */
     static <R> R doWithFallback(ExecutorService exec,
-            long timeOut, long secondaryTimeOut,
-            TableFunction<R> task,
-            DocumentStore primary, DocumentStore secondary,
-            Runnable failover, AtomicBoolean switched) {
+                                long timeOut, long secondaryTimeOut,
+                                TableFunction<R> task,
+                                DocumentStore primary, DocumentStore secondary,
+                                Runnable failover, AtomicBoolean switched) {
         Future<R> primaryFuture = exec.submit(() -> task.apply(primary));
         try {
             try {
                 // try on the primary table ... if we get a result, we win
                 return primaryFuture.get(timeOut, TimeUnit.MILLISECONDS);
             } catch (TimeoutException | ExecutionException e) {
+                // We have lost confidence in the primary at this point even if we get a result
+                if (!switched.get()) {
+                    failover.run();
+                }
                 // No result in time from primary so we now try on either primary or secondary.
                 // Whichever returns first is the winner and the other is cancelled.
                 // Exceptional returns will be held until the other task completes successfully
@@ -788,10 +880,6 @@ public class EnhancedJSONTable implements DocumentStore {
                         primaryFuture::get,
                         () -> task.apply(secondary)
                 );
-                // We have lost confidence in the primary at this point even if we get a result
-                if (!switched.get()) {
-                    failover.run();
-                }
                 return exec.invokeAny(tasks, secondaryTimeOut, TimeUnit.MILLISECONDS);
             }
         } catch (InterruptedException e) {
@@ -828,6 +916,11 @@ public class EnhancedJSONTable implements DocumentStore {
         }
     }
 
+    /**
+     * Create task for swapping table back after timeout
+     *
+     * @param timeout Time after what we swap table back
+     */
     private void swapTableBackAfter(long timeout) {
         scheduler.schedule(
                 this::swapTableLinks, timeout, TimeUnit.MILLISECONDS);
@@ -867,6 +960,18 @@ public class EnhancedJSONTable implements DocumentStore {
         } finally {
             stores[1].close();
         }
+    }
+
+    /**
+     * Get DocumentStore from MapR-DB.
+     * Table must exist.
+     *
+     * @param tableName Name that correspond to db table name
+     * @return com.mapr.db.Table
+     */
+    private DocumentStore getDocumentStore(String tableName) {
+        Connection connection = DriverManager.getConnection(DB_DRIVER_NAME);
+        return connection.getStore(tableName);
     }
 
     static class FailoverException extends StoreException {
