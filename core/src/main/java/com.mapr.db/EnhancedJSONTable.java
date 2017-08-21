@@ -1,6 +1,5 @@
 package com.mapr.db;
 
-import com.google.common.collect.Lists;
 import org.ojai.Document;
 import org.ojai.DocumentStream;
 import org.ojai.FieldPath;
@@ -17,8 +16,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -835,10 +832,10 @@ public class EnhancedJSONTable implements DocumentStore {
 
     /**
      * Tries to do task on primary until timeOut milliseconds have passed. From then
-     * the task is also attempted with secondary. If either succeeds, we use that result.
+     * the task is also attempted with secondary. If second succeeds, we use that result.
      * If the primary blows the first timeout, then we initiate a failover by invoking
      * failoverTask. When both primary and secondary throw exceptions, we rethrow the
-     * last exception received. When both primary and secondary exceed secondaryTimeOut
+     * last exception received. When secondary exceed secondaryTimeOut
      * milliseconds with no exceptions and no results, then an exception is thrown.
      * <p>
      * This method is static to make testing easier.
@@ -868,19 +865,14 @@ public class EnhancedJSONTable implements DocumentStore {
                 return primaryFuture.get(timeOut, TimeUnit.MILLISECONDS);
             } catch (TimeoutException | ExecutionException e) {
                 // We have lost confidence in the primary at this point even if we get a result
+                // We cancel request to the primary table, for fast change to the failover table
+                primaryFuture.cancel(true);
                 if (!switched.get()) {
                     failover.run();
                 }
-                // No result in time from primary so we now try on either primary or secondary.
-                // Whichever returns first is the winner and the other is cancelled.
-                // Exceptional returns will be held until the other task completes successfully
-                // or the timeout expires.
-                @SuppressWarnings("unchecked")
-                List<Callable<R>> tasks = Lists.newArrayList(
-                        primaryFuture::get,
-                        () -> task.apply(secondary)
-                );
-                return exec.invokeAny(tasks, secondaryTimeOut, TimeUnit.MILLISECONDS);
+                // No result in time from primary so we now try on secondary.
+                // Exceptional returns when timeout expires.
+                return exec.submit(() -> task.apply(secondary)).get(secondaryTimeOut, TimeUnit.MILLISECONDS);
             }
         } catch (InterruptedException e) {
             // this should never happen except perhaps in debugging or on shutdown
