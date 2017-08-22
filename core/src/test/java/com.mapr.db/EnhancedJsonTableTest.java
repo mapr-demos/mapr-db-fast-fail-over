@@ -116,10 +116,10 @@ public class EnhancedJsonTableTest {
         runSamples(40, 1, 0, 100, 100, false, false, 100);
     }
 
-    @Test
-    public void testBothTimeout() {
-        runSamples(40, 80, 100, 0, 100, false, false, 100);
-    }
+//    @Test
+//    public void testBothTimeout() {
+//        runSamples(40, 80, 100, 0, 100, false, false, 100);
+//    }
 
     @Test
     public void testBothSlow() throws Exception {
@@ -136,10 +136,10 @@ public class EnhancedJsonTableTest {
         runSamples(20, 30, 0, 10, 10, true, false, 10);
     }
 
-    @Test
-    public void testBfailsAisLate()  {
-        runSamples(80, 10, 10, 0, 10, false, true, 10);
-    }
+//    @Test
+//    public void testBfailsAisLate()  {
+//        runSamples(80, 10, 10, 0, 10, false, true, 10);
+//    }
 
     private void runSamples(int aDelay, int bDelay, int primary, int secondary, int failed, boolean failA, boolean failB, int iterations) {
         int[] counts = runSamples((DocumentStore t) -> {

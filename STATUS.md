@@ -4,6 +4,15 @@ See https://github.com/mapr-demos/mapr-db-fast-fail-over/ for code and issue tra
 See https://goo.gl/8ZmWAh for google doc with meeting minutes.
 Hangout at https://hangouts.google.com/hangouts/_/maprtech.com/mapr-fast-failover
 
+Mon Aug 21 08:04:56 PDT 2017
+=====
+
+Implemented synchronous behavior. This fixes timeout issue
+
+Waiting on docker code from Ted
+
+Master now have updated code from simplified
+
 Fri Aug 18 08:04:56 PDT 2017
 =====
 
