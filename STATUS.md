@@ -4,6 +4,15 @@ See https://github.com/mapr-demos/mapr-db-fast-fail-over/ for code and issue tra
 See https://goo.gl/8ZmWAh for google doc with meeting minutes.
 Hangout at https://hangouts.google.com/hangouts/_/maprtech.com/mapr-fast-failover
 
+Tue Aug 22 08:04:56 PDT 2017
+=====
+
+Found way to run the sample applications from the IDE
+
+Manually test logic through sample applications
+
+Because we did not get docker code, we will test application through vagrant staff from IDE
+
 Mon Aug 21 08:04:56 PDT 2017
 =====
 
