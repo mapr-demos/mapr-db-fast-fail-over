@@ -1,8 +1,36 @@
 Links
 =====
 See https://github.com/mapr-demos/mapr-db-fast-fail-over/ for code and issue tracker.
+
 See https://goo.gl/8ZmWAh for google doc with meeting minutes.
+
 Hangout at https://hangouts.google.com/hangouts/_/maprtech.com/mapr-fast-failover
+
+Wed Aug 23 08:05:31 PDT 2017
+=========
+Failover logic has adjusted to close and reopen tables on failure. Vagrant being used as alternative to docker for testing. Tests are currently semi-automated, but the actual cluster failures require manual intervention for now. To substantially improve this, we will likely require either Docker or independent nodes in order to be able to manipulate networks instead of taking micro-clusters up and down during the test.
+
+Jepsen has been difficult to use because it is based on Clojure and understanding how to run it seems like it will take longer than available time.
+
+Currently testing findall, with condition. Need a process to install a node with working Drill to test the find methods. The music team appears to be key to facilitating this. This difficulty raises the question of whether 6.0 in general will have this installation difficulty.
+
+Independence Day celebrations will delay next contact to Friday.
+
+Actions
+-----
+
+Ted will continue efforts to get Docker information from Andy.
+
+Vlad and Dmitriy will continue testing work.
+
+Tue Aug 22 08:04:56 PDT 2017
+=====
+
+Found way to run the sample applications from the IDE
+
+Manually test logic through sample applications
+
+Because we did not get docker code, we will test application through vagrant staff from IDE
 
 Mon Aug 21 08:04:56 PDT 2017
 =====
