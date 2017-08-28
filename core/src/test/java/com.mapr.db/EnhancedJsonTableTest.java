@@ -3,7 +3,6 @@ package com.mapr.db;
 import com.mapr.db.exceptions.DBException;
 import com.mapr.db.impl.BaseJsonTable;
 import org.apache.hadoop.conf.Configuration;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.ojai.Document;
 import org.ojai.DocumentStream;
@@ -19,7 +18,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -31,81 +29,6 @@ public class EnhancedJsonTableTest {
     private static final Logger LOG =
             LoggerFactory.getLogger(EnhancedJsonTableTest.class);
 
-//    private static final int NUMBER_OF_REQUESTS = 100;
-
-    private static final String DRIVER_NAME = "ojai:mapr:";
-
-    private static final String PRIMARY_TABLE = "/mapr/cluster1/apps/user_profile";
-    private static final String SECONDARY_TABLE = "/mapr/cluster2/apps/user_profile";
-
-    private static final int TIMEOUT = 500;
-
-    //    TODO: Find method to slow connection with primary cluster or shutdown it from test
-    @Test
-    @Ignore("Needs configuration data for the two reachable clusters")
-    public void testInsert() throws InterruptedException {
-        Connection primaryConn =
-                DriverManager.getConnection(DRIVER_NAME);
-//        Connection secondaryConn =
-//                DriverManager.getConnection(DRIVER_NAME);
-
-//        DocumentStore primaryStore = primaryConn.getStore(PRIMARY_TABLE);
-//        DocumentStore secondaryStore = secondaryConn.getStore(SECONDARY_TABLE);
-
-        EnhancedJSONTable jsonTable =
-                new EnhancedJSONTable(PRIMARY_TABLE, SECONDARY_TABLE, TIMEOUT);
-
-        LOG.info("Make requests to the cluster, when both of clusters work");
-        makeRequestToDb(jsonTable, primaryConn, 10);
-        LOG.info("SHUTDOWN CLUSTER FOR A SOME TIME");
-        Thread.sleep(10 * 1000);
-
-        LOG.info("Make requests to the cluster, when primary cluster shutdown");
-        makeRequestToDb(jsonTable, primaryConn, 30);
-
-        Thread.sleep(10 * 1000);
-        LOG.info("SWITCH ON PRIMARY CLUSTER");
-        makeRequestToDb(jsonTable, primaryConn, 10);
-
-//        closeStoreAndConn(primaryConn, primaryStore);
-//        closeStoreAndConn(secondaryConn, secondaryStore);
-    }
-
-    private void makeRequestToDb(EnhancedJSONTable jsonTable, Connection connection,
-                                 int quantityOfRequest) {
-        for (int i = 0; i < quantityOfRequest; i++) {
-            Document doc = getNewDocument(connection);
-            LOG.info("Insert - " + doc.asJsonString());
-            jsonTable.insert(doc);
-        }
-    }
-
-    private void closeStoreAndConn(Connection primaryConn,
-                                   DocumentStore primaryStore) {
-        primaryStore.close();
-        primaryConn.close();
-    }
-
-    private Document getNewDocument(Connection connection) {
-        String newDocUUID = UUID.randomUUID().toString();
-        return connection
-                .newDocument()
-                .setId("fdoe-" + newDocUUID)
-                .set("name", "fredDoe-" + newDocUUID)
-                .set("type", "user")
-                .set("yelping_since", "2014-03-23")
-                .set("fans", 2)
-                .set("support", "gold");
-    }
-
-    private int countDocuments(DocumentStore store) {
-        int counter = 0;
-        for (Document ignored : store.find()) {
-            counter++;
-        }
-        return counter;
-    }
-
     @Test
     public void testPrimarySlowNoTimeout() {
         runSamples(5, 0, 100, 0, 0, false, false, 100);
@@ -115,11 +38,6 @@ public class EnhancedJsonTableTest {
     public void testPrimaryTimeout() {
         runSamples(40, 1, 0, 100, 100, false, false, 100);
     }
-
-//    @Test
-//    public void testBothTimeout() {
-//        runSamples(40, 80, 100, 0, 100, false, false, 100);
-//    }
 
     @Test
     public void testBothSlow() throws Exception {
@@ -135,11 +53,6 @@ public class EnhancedJsonTableTest {
     public void testAfailsBsucceeds() throws Exception {
         runSamples(20, 30, 0, 10, 10, true, false, 10);
     }
-
-//    @Test
-//    public void testBfailsAisLate()  {
-//        runSamples(80, 10, 10, 0, 10, false, true, 10);
-//    }
 
     private void runSamples(int aDelay, int bDelay, int primary, int secondary, int failed, boolean failA, boolean failB, int iterations) {
         int[] counts = runSamples((DocumentStore t) -> {

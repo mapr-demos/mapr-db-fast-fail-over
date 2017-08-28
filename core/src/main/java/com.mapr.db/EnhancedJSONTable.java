@@ -118,7 +118,7 @@ public class EnhancedJSONTable implements DocumentStore {
     public EnhancedJSONTable(String primaryTable, String secondaryTable, long timeOut) {
         this.tableNames = new String[]{primaryTable, secondaryTable};
         this.timeOut = timeOut;
-        this.secondaryTimeOut = 15 * timeOut; // TODO (related to #15) Find the way to reduce time for first request to secondary cluster
+        this.secondaryTimeOut = 15 * timeOut;
 
         DocumentStore primary = getDocumentStore(primaryTable);
         DocumentStore secondary = getDocumentStore(secondaryTable);
@@ -785,6 +785,10 @@ public class EnhancedJSONTable implements DocumentStore {
         return checkAndDoWithFailover((DocumentStore t) -> t.checkAndReplace(_id, condition, doc), veryDangerous);
     }
 
+    public boolean isTableSwitched() {
+        return switched.get();
+    }
+
     private void doNoReturn(TableProcedure task, boolean withFailover) {
         checkAndDoWithFailover((DocumentStore t) -> {
             task.apply(t);
@@ -929,7 +933,7 @@ public class EnhancedJSONTable implements DocumentStore {
         long minute = 60000;
         switch (numberOfSwitch) {
             case 0:
-                return minute / 6;
+                return minute / 3;
             case 1:
                 return minute;
             default:
