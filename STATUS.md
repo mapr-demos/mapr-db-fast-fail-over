@@ -4,6 +4,18 @@ See https://github.com/mapr-demos/mapr-db-fast-fail-over/ for code and issue tra
 See https://goo.gl/8ZmWAh for google doc with meeting minutes.
 Hangout at https://hangouts.google.com/hangouts/_/maprtech.com/mapr-fast-failover
 
+Mon Aug 28 08:05:03 PDT 2017
+=========
+There is a problem related to initialization of the system. If initial requests succeed, then process continues as normal. If not, then there appears to be a stuck thread. This leads to a situation where an initial failure leads to a situation where the system fails and cannot work on the secondary either. This may be due to some kind of synchronous code, possibly related to an OJAI primitive that doesn’t like to be canceled.
+
+The failures are also being simulated by graceful shutdown 
+
+Actions
+--------
+Test idea that the OJAI connection is in a bad state after initial failure.
+
+Add tests that kill internet connection as opposed to graceful shutdown.
+
 Wed Aug 23 08:05:31 PDT 2017
 =========
 Failover logic has adjusted to close and reopen tables on failure. Vagrant being used as alternative to docker for testing. Tests are currently semi-automated, but the actual cluster failures require manual intervention for now. To substantially improve this, we will likely require either Docker or independent nodes in order to be able to manipulate networks instead of taking micro-clusters up and down during the test.
