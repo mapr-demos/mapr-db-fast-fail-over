@@ -58,7 +58,6 @@ public class EnhancedJSONTable implements DocumentStore {
     // thread pool that does all the work
     private ExecutorService tableOperationExecutor = Executors.newFixedThreadPool(2);
 
-    // TODO make fail back work
     /**
      * Variable for determining time that needed for switching table
      */
@@ -801,10 +800,18 @@ public class EnhancedJSONTable implements DocumentStore {
         DocumentStore primary = stores[i];
         DocumentStore secondary = stores[1 - i];
         if (withFailover) {
+            recreateExecutor();
             return doWithFallback(tableOperationExecutor, timeOut, secondaryTimeOut, task, primary, secondary,
                     this::swapTableLinks, switched);
         } else {
             return doWithoutFailover(task, primary);
+        }
+    }
+
+    private void recreateExecutor() {
+        if (!switched.get() & counterForTableSwitching.get() > 1) {
+            tableOperationExecutor.shutdownNow();
+            tableOperationExecutor = Executors.newFixedThreadPool(2);
         }
     }
 
