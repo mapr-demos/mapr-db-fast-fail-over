@@ -17,7 +17,7 @@ import java.util.concurrent.Executors;
 import static com.mapr.db.Util.clearTable;
 import static com.mapr.db.Util.printClustersInfo;
 import static com.mapr.db.Util.sleep;
-import static com.mapr.db.Util.startRestartingWarden;
+import static com.mapr.db.Util.startRestartingNetManager;
 import static com.mapr.db.Util.waitUntil;
 
 @Category(IntegrationTest.class)
@@ -30,7 +30,7 @@ public class InsertDocumentsTest implements IntegrationTest {
     private static final String HOST_WITH_PRIMARY_CLUSTER = "node1";
     private static final String PASSWORD_FOR_ROOT = "mapr";
 
-    private static final int TIMEOUT_FOR_CHECKING_CONDITION = 120_0000000;
+    private static final int TIMEOUT_FOR_CHECKING_CONDITION = 120_000;
 
     private static final Connection connection = DriverManager.getConnection("ojai:mapr:");
 
@@ -62,7 +62,7 @@ public class InsertDocumentsTest implements IntegrationTest {
     @Test
     public void testSwappingClusterIfPrimaryClusterDownAndSwapBackWhenPrimaryClusterWillReload() {
         // Reload Primary Cluster
-        startRestartingWarden(HOST_WITH_PRIMARY_CLUSTER, PASSWORD_FOR_ROOT);
+        startRestartingNetManager(HOST_WITH_PRIMARY_CLUSTER, PASSWORD_FOR_ROOT);
         // Wait for the switching to the failover cluster
         waitUntil(TIMEOUT_FOR_CHECKING_CONDITION, jsonTable::isTableSwitched);
         // Wait for the switching back to the primary cluster

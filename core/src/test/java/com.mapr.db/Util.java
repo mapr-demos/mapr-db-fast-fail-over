@@ -25,16 +25,16 @@ class Util {
     /**
      * Interval for checking condition in the waitUntil() methods
      */
-    private static final int DEFAULT_POLL_INTERVAL = 25000;
+    private static final int DEFAULT_POLL_INTERVAL = 10_000;
 
     /**
-     * Run shell script that will restart mapr-warden service on a cluster.
+     * Run shell script that will restart network manager on a cluster.
      *
      * @param hostWithPrimaryCluster host for ssh connection to the cluster
      * @param passForRoot            password for ssh connection as a root user to the cluster
      */
-    static void startRestartingWarden(String hostWithPrimaryCluster, String passForRoot) {
-        new Thread(() -> restartWarden(hostWithPrimaryCluster, passForRoot)).start();
+    static void startRestartingNetManager(String hostWithPrimaryCluster, String passForRoot) {
+        new Thread(() -> restartNetManager(hostWithPrimaryCluster, passForRoot)).start();
     }
 
     static void printClustersInfo(String primaryCluster, String failoverCluster) {
@@ -127,8 +127,8 @@ class Util {
         throw lastAssertionError;
     }
 
-    private static void restartWarden(String hostWithPrimaryCluster, String rootPass) {
-        URL restartScript = Resources.getResource("restartWarden.sh");
+    private static void restartNetManager(String hostWithPrimaryCluster, String rootPass) {
+        URL restartScript = Resources.getResource("restartNetManager.sh");
         ProcessBuilder pb = new ProcessBuilder(restartScript.getPath(), hostWithPrimaryCluster, rootPass);
         try {
             Process p = pb.start();
