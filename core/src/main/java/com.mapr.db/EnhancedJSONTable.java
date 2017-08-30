@@ -55,9 +55,8 @@ public class EnhancedJSONTable implements DocumentStore {
 
     private String[] tableNames;       // the names of the tables
 
-    // thread pool that does all the work
-    private ExecutorService tableOperationExecutor = Executors.newFixedThreadPool(2);
-
+    private ExecutorService primaryExecutor = Executors.newSingleThreadExecutor();
+    private ExecutorService secondaryExecutor = Executors.newSingleThreadExecutor();
     /**
      * Variable for determining time that needed for switching table
      */
@@ -103,7 +102,7 @@ public class EnhancedJSONTable implements DocumentStore {
      * @param secondaryTable the table used in case of fail over
      */
     public EnhancedJSONTable(String primaryTable, String secondaryTable) {
-        this(primaryTable, secondaryTable, 500);
+        this(primaryTable, secondaryTable, 700);
     }
 
     /**
@@ -800,18 +799,15 @@ public class EnhancedJSONTable implements DocumentStore {
         DocumentStore primary = stores[i];
         DocumentStore secondary = stores[1 - i];
         if (withFailover) {
-            recreateExecutor();
-            return doWithFallback(tableOperationExecutor, timeOut, secondaryTimeOut, task, primary, secondary,
-                    this::swapTableLinks, switched);
+            if (switched.get()) {
+                return doWithFallback(secondaryExecutor, primaryExecutor, timeOut, secondaryTimeOut, task, primary, secondary,
+                        this::swapTableLinks, switched);
+            } else {
+                return doWithFallback(primaryExecutor, secondaryExecutor, timeOut, secondaryTimeOut, task, primary, secondary,
+                        this::swapTableLinks, switched);
+            }
         } else {
             return doWithoutFailover(task, primary);
-        }
-    }
-
-    private void recreateExecutor() {
-        if (!switched.get() & counterForTableSwitching.get() > 1) {
-            tableOperationExecutor.shutdownNow();
-            tableOperationExecutor = Executors.newFixedThreadPool(2);
         }
     }
 
@@ -825,7 +821,7 @@ public class EnhancedJSONTable implements DocumentStore {
      */
     private <R> R doWithoutFailover(TableFunction<R> task, DocumentStore primary) {
         try {
-            return tableOperationExecutor.submit(() -> task.apply(primary)).get();
+            return primaryExecutor.submit(() -> task.apply(primary)).get();
         } catch (InterruptedException e) {
             // this should never happen except perhaps in debugging or on shutdown
             throw new FailoverException("Thread was interrupted during operation", e);
@@ -851,7 +847,7 @@ public class EnhancedJSONTable implements DocumentStore {
      * <p>
      * This method is static to make testing easier.
      *
-     * @param exec             The executor that does all the work
+     * @param prim             The executor that does all the work
      * @param timeOut          How long to wait before invoking the secondary
      * @param secondaryTimeOut How long to wait before entirely giving up
      * @param task             A lambda with one argument, a table, that does the desired operation
@@ -864,12 +860,12 @@ public class EnhancedJSONTable implements DocumentStore {
      * @throws StoreException    If both primary and secondary fail
      * @throws FailoverException If both primary and secondary fail. This may wrap a real exception
      */
-    static <R> R doWithFallback(ExecutorService exec,
+    static <R> R doWithFallback(ExecutorService prim, ExecutorService sec,
                                 long timeOut, long secondaryTimeOut,
                                 TableFunction<R> task,
                                 DocumentStore primary, DocumentStore secondary,
                                 Runnable failover, AtomicBoolean switched) {
-        Future<R> primaryFuture = exec.submit(() -> task.apply(primary));
+        Future<R> primaryFuture = prim.submit(() -> task.apply(primary));
         try {
             try {
                 // try on the primary table ... if we get a result, we win
@@ -883,7 +879,7 @@ public class EnhancedJSONTable implements DocumentStore {
                 }
                 // No result in time from primary so we now try on secondary.
                 // Exceptional returns when timeout expires.
-                return exec.submit(() -> task.apply(secondary)).get(secondaryTimeOut, TimeUnit.MILLISECONDS);
+                return sec.submit(() -> task.apply(secondary)).get(secondaryTimeOut, TimeUnit.MILLISECONDS);
             }
         } catch (InterruptedException e) {
             // this should never happen except perhaps in debugging or on shutdown
@@ -957,7 +953,8 @@ public class EnhancedJSONTable implements DocumentStore {
     @Override
     public void close() throws StoreException {
         scheduler.shutdownNow();
-        tableOperationExecutor.shutdownNow();
+        primaryExecutor.shutdownNow();
+        secondaryExecutor.shutdownNow();
         try {
             stores[0].close();
         } finally {

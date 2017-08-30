@@ -76,14 +76,15 @@ public class EnhancedJsonTableTest {
     }
 
     private int[] runSamples(EnhancedJSONTable.TableFunction<Integer> task, int iterations) {
-        ExecutorService exec = Executors.newFixedThreadPool(3);
+        ExecutorService prim = Executors.newSingleThreadExecutor();
+        ExecutorService sec = Executors.newSingleThreadExecutor();
         TestStore a = new TestStore(0);
         TestStore b = new TestStore(1);
 
         int[] counts = new int[3];
         for (int i = 0; i < iterations; i++) {
             int r = EnhancedJSONTable.doWithFallback(
-                    exec, 20, 1000,
+                    prim, sec, 20, 1000,
                     task,
                     a, b,
                     () -> counts[2]++, new AtomicBoolean(false));
