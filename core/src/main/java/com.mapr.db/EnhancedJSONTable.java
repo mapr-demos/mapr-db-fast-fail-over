@@ -55,7 +55,13 @@ public class EnhancedJSONTable implements DocumentStore {
 
     private String[] tableNames;       // the names of the tables
 
+    /**
+     * Executor for working with primary store
+     */
     private ExecutorService primaryExecutor = Executors.newSingleThreadExecutor();
+    /**
+     * Executor for working with failover store
+     */
     private ExecutorService secondaryExecutor = Executors.newSingleThreadExecutor();
     /**
      * Variable for determining time that needed for switching table
@@ -800,6 +806,8 @@ public class EnhancedJSONTable implements DocumentStore {
         DocumentStore secondary = stores[1 - i];
         if (withFailover) {
             if (switched.get()) {
+                // change executor if table switched, in this case primary executor work only with primary cluster
+                // and secondary executor work only with failover table
                 return doWithFallback(secondaryExecutor, primaryExecutor, timeOut, secondaryTimeOut, task, primary, secondary,
                         this::swapTableLinks, switched);
             } else {
