@@ -33,10 +33,16 @@ class Util {
      * @param hostWithPrimaryCluster host for ssh connection to the cluster
      * @param passForRoot            password for ssh connection as a root user to the cluster
      */
-    static void startRestartingNetManager(String hostWithPrimaryCluster, String passForRoot) {
+    static void restartingNetManager(String hostWithPrimaryCluster, String passForRoot) {
         new Thread(() -> restartNetManager(hostWithPrimaryCluster, passForRoot)).start();
     }
 
+    /**
+     * Simply prints in log name of the primary/failover tables
+     *
+     * @param primaryCluster  The name of the primary table
+     * @param failoverCluster The name of the failover table
+     */
     static void printClustersInfo(String primaryCluster, String failoverCluster) {
         LOG.info("Primary Cluster -> {}", primaryCluster);
         LOG.info("FailOver Cluster -> {}", failoverCluster);
