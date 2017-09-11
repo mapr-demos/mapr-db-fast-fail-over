@@ -340,18 +340,24 @@ public class EnhancedJSONTable implements DocumentStore {
 
     /**
      * {@inheritDoc}
+     *
+     * @return DocumentStream that wrapped by DocumentStreamFailoverWrapper for catching {@code StoreException}
+     * and rethrowing {@code EnhancedJSONTable.FailoverException}
      */
     @Override
     public DocumentStream findQuery(@NonNullable Query query) throws StoreException {
-        return checkAndDoWithFailover((DocumentStore t) -> t.findQuery(query), SAFE);
+        return new DocumentStreamFailoverWrapper(checkAndDoWithFailover((DocumentStore t) -> t.findQuery(query), SAFE));
     }
 
     /**
      * {@inheritDoc}
+     *
+     * @return DocumentStream that wrapped by DocumentStreamFailoverWrapper for catching {@code StoreException}
+     * and rethrowing {@code EnhancedJSONTable.FailoverException}
      */
     @Override
     public DocumentStream findQuery(@NonNullable String query) throws StoreException {
-        return checkAndDoWithFailover((DocumentStore t) -> t.findQuery(query), SAFE);
+        return new DocumentStreamFailoverWrapper(checkAndDoWithFailover((DocumentStore t) -> t.findQuery(query), SAFE));
     }
 
     /**
