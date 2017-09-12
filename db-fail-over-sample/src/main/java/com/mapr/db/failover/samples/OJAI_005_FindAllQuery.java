@@ -19,12 +19,16 @@ import com.mapr.db.EnhancedJSONTable;
 import org.ojai.Document;
 import org.ojai.DocumentStream;
 import org.ojai.store.Connection;
+import org.ojai.store.DocumentStore;
 import org.ojai.store.DriverManager;
 import org.ojai.store.Query;
+import org.ojai.store.exceptions.StoreException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+
+import static java.lang.Thread.sleep;
 
 @SuppressWarnings("Duplicates")
 public class OJAI_005_FindAllQuery {
@@ -33,16 +37,18 @@ public class OJAI_005_FindAllQuery {
             LoggerFactory.getLogger(OJAI_005_FindAllQuery.class);
 
     private static final String PRIMARY_TABLE = "/mapr/mapr.cluster1/apps/user_profiles";
-    private static final String FAILOVER_TABLE = "/mapr/mapr.cluster2/apps/user_profiles";
+    private static final String FAILOVER_TABLE = "/mapr/mapr.cluster3/apps/user_profiles";
 
-    public static void main(final String[] args) throws IOException {
+    // Create an OJAI connection to MapR cluster
+    private static final Connection connection = DriverManager.getConnection("ojai:mapr:");
+
+    public static void main(final String[] args) throws IOException, InterruptedException {
 
         LOG.info("==== Start Application ===");
 
-        // Create an OJAI connection to MapR cluster
-        final Connection connection = DriverManager.getConnection("ojai:mapr:");
+        EnhancedJSONTable stores = new EnhancedJSONTable(PRIMARY_TABLE, FAILOVER_TABLE);
 
-        EnhancedJSONTable store = new EnhancedJSONTable(PRIMARY_TABLE, FAILOVER_TABLE);
+        DocumentStore primary = connection.getStore(FAILOVER_TABLE);
 
         // Build an OJAI query
         final Query query = connection.newQuery()
@@ -51,21 +57,32 @@ public class OJAI_005_FindAllQuery {
                 .limit(5)
                 .build();
 
-        // fetch all OJAI Documents from this store
-        final DocumentStream stream = store.findQuery(query);
+        int counter = 0;
+        while(true) {
+            final DocumentStream stream = stores.findQuery(query);
 
-        for (final Document userDocument : stream) {
-            // Print the OJAI Document
-            LOG.info(userDocument.asJsonString());
+            try {
+                for (final Document doc : stream) {
+                    // Print the OJAI Document
+                    LOG.info(doc.asJsonString());
+                }
+
+            } catch (StoreException se) {
+                LOG.info(se.getMessage());
+
+                DocumentStream replica = primary.findQuery(query);
+                for (final Document doc : replica) {
+                    // Print the OJAI Document
+                    LOG.info(doc.asJsonString());
+                }
+                break;
+            }
+            LOG.info(" == "+ counter++  +" == ");
+            sleep(1000);
         }
 
-        stream.close();
-
-        // Close this instance of OJAI DocumentStore
-        store.close();
-
-        // close the OJAI connection and release any resources held by the connection
-        connection.close();
+        stores.close();
+        primary.close();
 
         LOG.info("==== End Application ===");
     }
