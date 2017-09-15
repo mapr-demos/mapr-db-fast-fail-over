@@ -1,12 +1,12 @@
 /**
  * Copyright (c) 2017 MapR, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,28 +16,29 @@
 package com.mapr.db.failover.samples;
 
 import com.mapr.db.EnhancedJSONTable;
-import org.ojai.Document;
-import org.ojai.DocumentStream;
-import org.ojai.exceptions.QueryTimeoutException;
 import org.ojai.store.Connection;
-import org.ojai.store.DocumentStore;
 import org.ojai.store.DriverManager;
-import org.ojai.store.Query;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("Duplicates")
 public class OJAI_013_ReadYourOwnWrite {
 
-  public static void main(String[] args) {
+    private static final Logger LOG =
+            LoggerFactory.getLogger(OJAI_013_ReadYourOwnWrite.class);
 
-    System.out.println("==== Start Application ===");
+    private static final String PRIMARY_TABLE = "/mapr/mapr.cluster1/apps/user_profiles";
+    private static final String FAILOVER_TABLE = "/mapr/mapr.cluster2/apps/user_profiles";
+
+    public static void main(String[] args) {
+
+        LOG.info("==== Start Application ===");
 
 
-    // Create an OJAI connection to MapR cluster
-    final Connection connectionNode1 = DriverManager.getConnection("ojai:mapr:");
+        // Create an OJAI connection to MapR cluster
+        final Connection connectionNode1 = DriverManager.getConnection("ojai:mapr:");
 
-    String primaryTable = "/demo_table";
-    String secondaryTable = "/mapr/cluster2/demo_table";
-    EnhancedJSONTable storeNode1 = new EnhancedJSONTable(primaryTable, secondaryTable );
+        EnhancedJSONTable storeNode1 = new EnhancedJSONTable(PRIMARY_TABLE, FAILOVER_TABLE);
 
 
 // TODO : Not yet implemented see issue #22
@@ -80,10 +81,10 @@ public class OJAI_013_ReadYourOwnWrite {
 //      final DocumentStream stream = storeNode2.findQuery(query);
 //      for (final Document userDocument : stream) {
 //        // Print the OJAI Document
-//        System.out.println(userDocument.asJsonString());
+//        LOG.info(userDocument.asJsonString());
 //      }
 //    } catch (QueryTimeoutException e) {
-//      System.err.println("Timeout occurred while waiting for Query results");
+//      LOG.error("Timeout occurred while waiting for Query results");
 //    }
 //
 //    // Close this instance of OJAI DocumentStore
@@ -92,7 +93,6 @@ public class OJAI_013_ReadYourOwnWrite {
 //    // close the OJAI connection and release any resources held by the connection
 //    connectionNode2.close();
 
-    System.out.println("==== End Application ===");
-  }
-
+        LOG.info("==== End Application ===");
+    }
 }

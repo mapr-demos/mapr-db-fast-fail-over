@@ -1,12 +1,12 @@
 /**
  * Copyright (c) 2017 MapR, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,8 +20,9 @@ import com.mapr.ojai.examples.data.Dataset;
 import com.mapr.ojai.examples.data.User;
 import org.ojai.Document;
 import org.ojai.store.Connection;
-import org.ojai.store.DocumentStore;
 import org.ojai.store.DriverManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -29,34 +30,37 @@ import java.io.IOException;
 @SuppressWarnings("Duplicates")
 public class OJAI_002_GetStoreAndInsertDocuments {
 
-  public static void main(String[] args) throws IOException {
+    private static final Logger LOG =
+            LoggerFactory.getLogger(OJAI_002_GetStoreAndInsertDocuments.class);
 
-    System.out.println("==== Start Application ===");
+    private static final String PRIMARY_TABLE = "/mapr/mapr.cluster1/apps/user_profiles";
+    private static final String FAILOVER_TABLE = "/mapr/mapr.cluster2/apps/user_profiles";
 
-    // Create an OJAI connection to MapR cluster
-    final Connection connection = DriverManager.getConnection("ojai:mapr:");
+    public static void main(String[] args) throws IOException {
 
-    String primaryTable = "/demo_table";
-    String secondaryTable = "/mapr/cluster2/demo_table";
-    EnhancedJSONTable store = new EnhancedJSONTable(primaryTable, secondaryTable );
+        LOG.info("==== Start Application ===");
 
-    for (final User someUser : Dataset.users) {
-      // Create an OJAI Document form the Java bean (there are other ways too)
-      final Document userDocument = connection.newDocument(someUser);
+        // Create an OJAI connection to MapR cluster
+        final Connection connection = DriverManager.getConnection("ojai:mapr:");
 
-      System.out.println("\t inserting "+ userDocument.getId());
+        EnhancedJSONTable store = new EnhancedJSONTable(PRIMARY_TABLE, FAILOVER_TABLE);
 
-      // insert the OJAI Document into the DocumentStore
-      store.insertOrReplace(userDocument);
+        for (final User someUser : Dataset.users) {
+            // Create an OJAI Document form the Java bean (there are other ways too)
+            final Document userDocument = connection.newDocument(someUser);
+
+            LOG.info("\t inserting " + userDocument.getId());
+
+            // insert the OJAI Document into the DocumentStore
+            store.insertOrReplace(userDocument);
+        }
+
+        // Close this instance of OJAI DocumentStore
+        store.close();
+
+        // close the OJAI connection and release any resources held by the connection
+        connection.close();
+
+        LOG.info("==== End Application ===");
     }
-
-    // Close this instance of OJAI DocumentStore
-    store.close();
-
-    // close the OJAI connection and release any resources held by the connection
-    connection.close();
-
-    System.out.println("==== End Application ===");
-  }
-
 }
