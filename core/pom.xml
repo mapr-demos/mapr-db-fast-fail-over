@@ -18,11 +18,6 @@
         </repository>
     </repositories>
 
-    <properties>
-        <mapr.library.version>6.0.0-mapr-beta</mapr.library.version>
-        <logger.library.version>1.7.25</logger.library.version>
-    </properties>
-
     <build>
         <plugins>
             <plugin>
@@ -56,30 +51,6 @@
     </build>
 
     <dependencies>
-        <dependency>
-            <artifactId>mapr-ojai-driver</artifactId>
-            <groupId>com.mapr.ojai</groupId>
-            <version>${mapr.library.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
-            <version>${logger.library.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>${logger.library.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-log4j12</artifactId>
-            <version>${logger.library.version}</version>
-            <scope>test</scope>
-        </dependency>
 
         <dependency>
             <groupId>org.apache.commons</groupId>

@@ -19,11 +19,41 @@
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
+        <mapr.library.version>6.0.0-mapr-beta</mapr.library.version>
+        <logger.library.version>1.7.25</logger.library.version>
     </properties>
 
     <modules>
         <module>core</module>
         <module>db-fail-over-sample</module>
+        <module>db-stuck-reproduce</module>
     </modules>
+
+    <dependencies>
+        <dependency>
+            <artifactId>mapr-ojai-driver</artifactId>
+            <groupId>com.mapr.ojai</groupId>
+            <version>${mapr.library.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>${logger.library.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${logger.library.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>${logger.library.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
 </project>
